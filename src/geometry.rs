@@ -1,6 +1,9 @@
 use glam::Vec2;
 use simple_error::{SimpleResult, simple_error};
 
+/// Допустимая погрешность для геометрических рассчетов
+pub const DEFAULT_GEOMETRY_EPSILON: f32 = 1e-5;
+
 /// Расположение точки относительно отрезка
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PointArea {
@@ -38,9 +41,14 @@ pub struct LineSegment2d {
 }
 
 impl LineSegment2d {
-    /// Получить вектор направления
+    /// Получить _ненормализованный_ вектор направления
+    pub fn direction_not_normalized(&self) -> Vec2 {
+        self.b - self.a
+    }
+
+    /// Получить _нормализованный_ вектор направления, если это возможно
     pub fn direction(&self) -> Option<Vec2> {
-        (self.b - self.a).try_normalize()
+        self.direction_not_normalized().try_normalize()
     }
 
     /// Получить нормаль отрезка
@@ -56,7 +64,7 @@ impl LineSegment2d {
     /// Определить положение точки относительно отрезка с погрешностью
     pub fn classify_point(&self, point: &Vec2, maybe_epsilon: Option<f32>) -> PointArea {
         // Если не передана конкретная погрешность, то берем стандартную для типа "f32"
-        let epsilon = maybe_epsilon.unwrap_or(f32::EPSILON);
+        let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
 
         // От "line_a" к "line_b"
         let a2b = self.b - self.a;
@@ -98,7 +106,7 @@ impl LineSegment2d {
         circle: &Circle2d,
         maybe_epsilon: Option<f32>,
     ) -> Option<LineArea> {
-        let epsilon: f32 = maybe_epsilon.unwrap_or(f32::EPSILON);
+        let epsilon: f32 = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
 
         let maybe_n = self.normal();
         if let Some(n) = maybe_n {
@@ -124,7 +132,7 @@ impl LineSegment2d {
         bx: &AxisAlignedBoundingBox2d,
         maybe_epsilon: Option<f32>,
     ) -> Option<LineArea> {
-        let epsilon: f32 = maybe_epsilon.unwrap_or(f32::EPSILON);
+        let epsilon: f32 = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
 
         let maybe_n = self.normal();
         if let Some(n) = maybe_n {
@@ -195,9 +203,9 @@ impl LineSegment2d {
     }
 
     pub fn distance_to_point(&self, point: &Vec2, maybe_epsilon: Option<f32>) -> f32 {
-        let epsilon = maybe_epsilon.unwrap_or(f32::EPSILON);
+        let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
         let ab = self.b - self.a; // Вектор направления отрезка
-        let ap = point - self.a;  // Вектор от начала отрезка к целевой точке
+        let ap = point - self.a; // Вектор от начала отрезка к целевой точке
 
         // Квадрат длины отрезка
         let ab_len_sq = ab.length_squared();
@@ -253,7 +261,7 @@ impl InfiniteLine2d {
 
     /// Найти точку пересечения двух прямых
     pub fn intersect(&self, other: &InfiniteLine2d, maybe_epsilon: Option<f32>) -> Option<Vec2> {
-        let epsilon = maybe_epsilon.unwrap_or(f32::EPSILON);
+        let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
 
         // Косое произведение (определитель) векторов направлений
         let det = self.direction.x * other.direction.y - self.direction.y * other.direction.x;
@@ -316,6 +324,63 @@ impl AxisAlignedBoundingBox2d {
 
         (delta_x * delta_x + delta_y * delta_y).sqrt()
     }
+
+    /// Отсекает отрезок по границам прямоугольника (Алгоритм Лянга-Барски).
+    /// Возвращает Some(LineSegment2d) с новыми координатами, если отрезок виден,
+    /// или None, если отрезок находится полностью снаружи.
+    pub fn clip_line_segment(&self, line: &LineSegment2d, maybe_epsilon: Option<f32>) -> Option<LineSegment2d> {
+        let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
+
+        let d = line.direction_not_normalized();
+
+        // t_in собирает максимум (начинаем с 0.0 — старт отрезка)
+        let mut t_in = 0.0f32;
+        // t_out собирает минимум (начинаем с 1.0 — конец отрезка)
+        let mut t_out = 1.0f32;
+
+        // Вспомогательное замыкание (лямбда), чтобы не дублировать код для 4-х сторон.
+        // p — проекция направления (знаменатель), q — расстояние до границы (числитель).
+        let mut clip_edge = |p: f32, q: f32| -> bool {
+            if p.abs() < epsilon {
+                // Отрезок параллелен границе.
+                // Если q < 0, то начальная точка находится с внешней стороны от границы -> отрезок невидим.
+                return q >= 0.0;
+            }
+
+            let t = q / p;
+            if p < 0.0 {
+                // Отрезок направлен снаружи внутрь этой границы (линия входа)
+                if t > t_in {
+                    t_in = t;
+                }
+            } else {
+                // Отрезок направлен изнутри наружу этой границы (линия выхода)
+                if t < t_out {
+                    t_out = t;
+                }
+            }
+
+            // Если в любой момент точка входа оказалась позже точки выхода,
+            // отрезок целиком лежит снаружи прямоугольника.
+            t_in <= t_out
+        };
+
+        // Проверяем все 4 границы по очереди:
+        // Граница 1: Левая (X min)
+        if !clip_edge(-d.x, line.a.x - self.min.x) { return None; }
+        // Граница 2: Правая (X max)
+        if !clip_edge(d.x, self.max.x - line.a.x) { return None; }
+        // Граница 3: Нижняя (Y min)
+        if !clip_edge(-d.y, line.a.y - self.min.y) { return None; }
+        // Граница 4: Верхняя (Y max)
+        if !clip_edge(d.y, self.max.y - line.a.y) { return None; }
+
+        // Если интервал [t_in, t_out] остался валидным, строим отсеченный отрезок
+        Some(LineSegment2d {
+            a: line.a + t_in * d,
+            b: line.a + t_out * d,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -368,7 +433,7 @@ impl Polygon {
 
     /// Является ли многоугольник выпуклым?
     pub fn is_convex(&self, maybe_epsilon: Option<f32>) -> bool {
-        let epsilon = maybe_epsilon.unwrap_or(f32::EPSILON);
+        let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
         let n = self.vertices.len();
 
         // Многоугольники с менее чем 3 вершинами не могут быть выпуклыми
@@ -455,5 +520,101 @@ impl Polygon {
         }
 
         inside
+    }
+
+    pub fn is_line_segment_intersects(&self, line: &LineSegment2d, maybe_epsilon: Option<f32>) -> bool {
+        self.clip_line_segment(line, maybe_epsilon).is_some()
+    }
+
+    pub fn clip_line_segment(&self, line: &LineSegment2d, maybe_epsilon: Option<f32>) -> Option<LineSegment2d> {
+        let epsilon = maybe_epsilon.unwrap_or(1e-5);
+        let n = self.vertices.len();
+        if n < 3 {
+            return None;
+        }
+
+        let direction = line.direction_not_normalized();
+        let mut t_in = f32::NEG_INFINITY;
+        let mut t_out = f32::INFINITY;
+
+        // Обходим все грани многоугольника
+        // j — начальная вершина ребра, i — конечная
+        let mut j = n - 1;
+        for i in 0..n {
+            // Получаем внешнюю нормаль для текущего ребра (начинающегося в вершине j)
+            let n_vec = self.get_outer_normal_for(j)?;
+            let dn = direction.dot(n_vec);
+
+            if dn.abs() < epsilon {
+                // Отрезок параллелен текущему ребру
+                // Если начальная точка отрезка находится снаружи от ребра, отрезок целиком невидим
+                if (self.vertices[j] - line.a).dot(n_vec) > 0.0 {
+                    return None;
+                }
+                // Иначе отрезок лежит во внутренней полуплоскости грани, продолжаем проверку
+                j = i;
+                continue;
+            }
+
+            let pn = (self.vertices[j] - line.a).dot(n_vec);
+            let t = pn / dn;
+
+            if dn > 0.0 {
+                // Отрезок направлен изнутри многоугольника наружу
+                t_out = t_out.min(t);
+            } else {
+                // Отрезок направлен снаружи внутрь многоугольника
+                t_in = t_in.max(t);
+            }
+
+            // Если время входа превысило время выхода, пересечения с многоугольником нет
+            if t_out <= t_in {
+                return None;
+            }
+
+            j = i;
+        }
+
+        // Ограничиваем параметры t рамками исходного отрезка [0.0, 1.0]
+        t_in = t_in.max(0.0);
+        t_out = t_out.min(1.0);
+
+        // Финальная проверка на валидность интервала видимости
+        if t_out <= t_in {
+            return None;
+        }
+
+        // Вычисляем новые (отсеченные) координаты точек
+        Some(LineSegment2d {
+            a: line.a + t_in * direction,
+            b: line.a + t_out * direction,
+        })
+    }
+
+    /// Получить внешнюю нормаль для отрезка многоугольника.
+    /// Отрезок определяется по индексу его первой вершины.
+    fn get_outer_normal_for(&self, start_index: usize) -> Option<Vec2> {
+        let n = self.vertices.len();
+        if start_index >= n {
+            return None;
+        }
+
+        // Индексы следующей и тестовой (третьей) вершин с зацикливанием через остаток
+        let end_index = (start_index + 1) % n;
+        let test_index  = (start_index + 2) % n;
+
+        let first_vertex  = self.vertices[start_index];
+        let end_vertex = self.vertices[end_index];
+        let test_vertex  = self.vertices[test_index];
+
+        // Первичное построение перпендикуляра к ребру
+        let mut n_vec = Vec2::new(first_vertex.y - end_vertex.y, end_vertex.x - first_vertex.x);
+
+        // Если нормаль смотрит внутрь (в сторону тестовой вершины end_vertex), разворачиваем её
+        if (test_vertex - first_vertex).dot(n_vec) > 0.0 {
+            n_vec = -n_vec;
+        }
+
+        Some(n_vec)
     }
 }
