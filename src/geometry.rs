@@ -328,7 +328,11 @@ impl AxisAlignedBoundingBox2d {
     /// Отсекает отрезок по границам прямоугольника (Алгоритм Лянга-Барски).
     /// Возвращает Some(LineSegment2d) с новыми координатами, если отрезок виден,
     /// или None, если отрезок находится полностью снаружи.
-    pub fn clip_line_segment(&self, line: &LineSegment2d, maybe_epsilon: Option<f32>) -> Option<LineSegment2d> {
+    pub fn clip_line_segment(
+        &self,
+        line: &LineSegment2d,
+        maybe_epsilon: Option<f32>,
+    ) -> Option<LineSegment2d> {
         let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
 
         let d = line.direction_not_normalized();
@@ -367,13 +371,21 @@ impl AxisAlignedBoundingBox2d {
 
         // Проверяем все 4 границы по очереди:
         // Граница 1: Левая (X min)
-        if !clip_edge(-d.x, line.a.x - self.min.x) { return None; }
+        if !clip_edge(-d.x, line.a.x - self.min.x) {
+            return None;
+        }
         // Граница 2: Правая (X max)
-        if !clip_edge(d.x, self.max.x - line.a.x) { return None; }
+        if !clip_edge(d.x, self.max.x - line.a.x) {
+            return None;
+        }
         // Граница 3: Нижняя (Y min)
-        if !clip_edge(-d.y, line.a.y - self.min.y) { return None; }
+        if !clip_edge(-d.y, line.a.y - self.min.y) {
+            return None;
+        }
         // Граница 4: Верхняя (Y max)
-        if !clip_edge(d.y, self.max.y - line.a.y) { return None; }
+        if !clip_edge(d.y, self.max.y - line.a.y) {
+            return None;
+        }
 
         // Если интервал [t_in, t_out] остался валидным, строим отсеченный отрезок
         Some(LineSegment2d {
@@ -488,6 +500,60 @@ impl Polygon {
         true
     }
 
+    /// Проверить, лежит ли точка внутри треугольника (более оптимальный алгоритм).
+    /// Если это не треугольник, то вызывается "contains_point"
+    pub fn point_in_triangle(&self, point: &Vec2, maybe_epsilon: Option<f32>) -> bool {
+        if self.vertices.len() != 3 {
+            return self.contains_point(point);
+        }
+
+        let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
+
+        // Даем вершинам понятные геометрические имена
+        let a = self.vertices[0];
+        let b = self.vertices[1];
+        let c = self.vertices[2];
+
+        // Направленные векторы ребер, исходящие из базовой вершины 'c'
+        let edge_ca = a - c;
+        let edge_cb = b - c;
+
+        // Вектор от базовой вершины к целевой точке
+        let to_point = point - c;
+
+        // Вычисляем скалярные произведения векторов (метрики длин и проекций)
+        let dot_aa = edge_ca.dot(edge_ca);
+        let dot_ab = edge_ca.dot(edge_cb);
+        let dot_bb = edge_cb.dot(edge_cb);
+
+        let dot_pa = to_point.dot(edge_ca);
+        let dot_pb = to_point.dot(edge_cb);
+
+        // Главный определитель системы линейных уравнений (детерминант)
+        let det = dot_aa * dot_bb - dot_ab * dot_ab;
+
+        // Защита от вырожденного треугольника (если все 3 точки лежат на одной прямой)
+        if det.abs() < epsilon {
+            // Если точка лежит прямо на линии вырожденного треугольника, считаем это попаданием
+            return true;
+        }
+
+        // Вычисляем барицентрические координаты u и v через правило Крамера
+        let u = (dot_pa * dot_bb - dot_pb * dot_ab) / det;
+        if u < -epsilon || u > 1.0 + epsilon {
+            return false;
+        }
+
+        let v = (dot_aa * dot_pb - dot_ab * dot_pa) / det;
+        if v < -epsilon || v > 1.0 + epsilon {
+            return false;
+        }
+
+        // Точка находится внутри треугольника, если сумма барицентрических координат <= 1
+        u + v <= 1.0 + epsilon
+    }
+
+    /// Проверить, лежит ли точка внутри многоугольника
     pub fn contains_point(&self, point: &Vec2) -> bool {
         let n = self.vertices.len();
         if n < 3 {
@@ -522,11 +588,19 @@ impl Polygon {
         inside
     }
 
-    pub fn is_line_segment_intersects(&self, line: &LineSegment2d, maybe_epsilon: Option<f32>) -> bool {
+    pub fn is_line_segment_intersects(
+        &self,
+        line: &LineSegment2d,
+        maybe_epsilon: Option<f32>,
+    ) -> bool {
         self.clip_line_segment(line, maybe_epsilon).is_some()
     }
 
-    pub fn clip_line_segment(&self, line: &LineSegment2d, maybe_epsilon: Option<f32>) -> Option<LineSegment2d> {
+    pub fn clip_line_segment(
+        &self,
+        line: &LineSegment2d,
+        maybe_epsilon: Option<f32>,
+    ) -> Option<LineSegment2d> {
         let epsilon = maybe_epsilon.unwrap_or(1e-5);
         let n = self.vertices.len();
         if n < 3 {
@@ -601,11 +675,11 @@ impl Polygon {
 
         // Индексы следующей и тестовой (третьей) вершин с зацикливанием через остаток
         let end_index = (start_index + 1) % n;
-        let test_index  = (start_index + 2) % n;
+        let test_index = (start_index + 2) % n;
 
-        let first_vertex  = self.vertices[start_index];
+        let first_vertex = self.vertices[start_index];
         let end_vertex = self.vertices[end_index];
-        let test_vertex  = self.vertices[test_index];
+        let test_vertex = self.vertices[test_index];
 
         // Первичное построение перпендикуляра к ребру
         let mut n_vec = Vec2::new(first_vertex.y - end_vertex.y, end_vertex.x - first_vertex.x);
