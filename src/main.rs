@@ -2,7 +2,6 @@ use glam::{Mat2, Vec2, Vec2Swizzles};
 use num_complex::{Complex32, ComplexFloat};
 
 mod geometry;
-mod math;
 
 /// Проверка некоторые соответствия между библиотеками "GLM" (C++) и "glam" (Rust)
 fn glm_glam_correspondences() {
@@ -369,6 +368,13 @@ fn triangles_showcase() {
     }
 }
 
+fn cross_product_showcase() {
+    use glam::Vec3;
+    let a = Vec3::new(1.0, 2.0, 3.0);
+    let b = Vec3::new(2.5, 1.9, -4.3);
+    println!("[a,b] = {:?}", a.cross(b));
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -381,4 +387,5 @@ fn main() {
     triangle_square_showcase();
     convex_polygon_showcase();
     triangles_showcase();
+    cross_product_showcase();
 }
