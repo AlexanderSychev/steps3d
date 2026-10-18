@@ -299,12 +299,12 @@ fn point_aabb_distance_showcase() {
 }
 
 fn triangle_square_showcase() {
-    use geometry::Polygon;
+    use geometry::Polygon2d;
 
     let a = Vec2::new(1.0, 2.0);
     let b = Vec2::new(2.0, 1.0);
     let c = Vec2::new(0.5, 1.0);
-    let triangle = Polygon::triangle(&a, &b, &c);
+    let triangle = Polygon2d::triangle(&a, &b, &c);
 
     let square = triangle.signed_area();
 
@@ -319,10 +319,10 @@ fn triangle_square_showcase() {
 }
 
 fn convex_polygon_showcase() {
-    use geometry::Polygon;
+    use geometry::Polygon2d;
 
     print!("Параллелограмм выпуклый. ");
-    let parallelogram = Polygon::new(&vec![
+    let parallelogram = Polygon2d::new(&vec![
         Vec2::new(1.0, 1.0),
         Vec2::new(2.0, 3.0),
         Vec2::new(4.0, 3.0),
@@ -333,7 +333,7 @@ fn convex_polygon_showcase() {
     println!("✓");
 
     print!("Неправильный пятиугольник не выпуклый. ");
-    let strange = Polygon::new(&vec![
+    let strange = Polygon2d::new(&vec![
         Vec2::new(2.0, 4.0),
         Vec2::new(1.0, 6.0),
         Vec2::new(3.0, 5.0),
@@ -343,6 +343,30 @@ fn convex_polygon_showcase() {
     .unwrap();
     assert!(!strange.is_convex(None));
     println!("✓");
+}
+
+fn triangles_showcase() {
+    use geometry::Polygon2d;
+
+    println!("Разбивка набора вершин на треугольники");
+    let vertices = vec![
+        Vec2::new(1.0, 1.0),
+        Vec2::new(2.5, 1.5),
+        Vec2::new(2.0, 3.0),
+        Vec2::new(4.0, 0.5),
+        Vec2::new(4.5, 2.5),
+        Vec2::new(5.0, 3.5),
+    ];
+    println!("  Вершины:");
+    for vertex in &vertices {
+        println!("    {:?}", vertex);
+    }
+
+    let triangles = Polygon2d::triangulate_vertices(&vertices, None).unwrap();
+    println!("  Треугольники:");
+    for triangle in &triangles {
+        println!("    {:?}", triangle);
+    }
 }
 
 fn main() {
@@ -356,4 +380,5 @@ fn main() {
     infinite_line_2d_showcase();
     triangle_square_showcase();
     convex_polygon_showcase();
+    triangles_showcase();
 }
