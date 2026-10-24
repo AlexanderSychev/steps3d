@@ -779,6 +779,83 @@ fn r_tree_showcase() {
     );
 }
 
+/// Равномерная сетка: вычисление ячеек, поиск по области и 3D-DDA
+fn regular_grid_showcase() {
+    use geometry::{AxisAlignedBoundingBox3d, Ray3d, RegularGrid, Sphere};
+    use glam::Vec3;
+
+    println!("\nРегулярная сетка\n");
+
+    let spheres = vec![
+        Sphere::new(Vec3::new(-8.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(-3.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::ZERO, 2.0),
+        Sphere::new(Vec3::new(3.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(8.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(0.0, 4.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(0.0, 0.0, 6.0), 1.0),
+    ];
+
+    let grid = RegularGrid::build([4, 4, 4], spheres).unwrap();
+    assert!(!grid.is_empty());
+    assert!(grid.is_consistent(None));
+
+    println!(
+        "Объектов: {}, размеры: {:?}, ячеек: {}, занято: {}, максимум в ячейке: {}",
+        grid.len(),
+        grid.dimensions(),
+        grid.cell_count(),
+        grid.occupied_cells(),
+        grid.max_cell_occupancy()
+    );
+    println!("AABB: {:?}", grid.bounds());
+    println!("Размер ячейки: {:?}", grid.cell_size());
+
+    let point = Vec3::ZERO;
+    let cell = grid.cell_coords(point);
+    println!(
+        "\nТочка {:?} попадает в ячейку {:?}, её AABB: {:?}",
+        point,
+        cell,
+        grid.cell_bounds(cell).unwrap()
+    );
+
+    if let Some(shapes) = grid.shapes_in_cell(cell) {
+        println!("  в ячейке объектов: {}", shapes.len());
+        for sphere in shapes {
+            println!("    {:?}", sphere);
+        }
+    }
+
+    let area = AxisAlignedBoundingBox3d::new(Vec3::splat(-1.5), Vec3::splat(1.5));
+    let found = grid.find_shapes_in_box(&area);
+
+    println!("\nОбласть {:?} содержит объектов: {}", area, found.len());
+    for sphere in &found {
+        println!("  {:?}", sphere);
+    }
+
+    let ray = Ray3d {
+        origin: Vec3::new(0.0, 0.0, -20.0),
+        direction: Vec3::Z,
+    };
+
+    match grid.find_closest_ray_hit(&ray, None) {
+        Some((t, sphere)) => println!("\nЛуч {:?}: сфера {:?}, t = {:?}", ray, sphere, t),
+        None => println!("\nЛуч {:?}: попаданий нет", ray),
+    }
+
+    let brute_force = grid
+        .shapes()
+        .filter_map(|sphere| sphere.ray_intersection(&ray, None).map(|t| (t, sphere)))
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+
+    println!(
+        "  проверка полным перебором: {:?}",
+        brute_force.map(|(t, sphere)| (t, sphere.center))
+    );
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -797,4 +874,5 @@ fn main() {
     kd_tree_showcase();
     bsp_showcase();
     r_tree_showcase();
+    regular_grid_showcase();
 }
