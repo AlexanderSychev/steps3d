@@ -1,5 +1,6 @@
 use super::constants::DEFAULT_GEOMETRY_EPSILON;
 use super::plane::{Plane, PlaneSide};
+use super::ray_3d::Ray3d;
 use glam::Vec3;
 
 /// Параллелепипед, параллельный осям координат (AABB) в 3D
@@ -98,6 +99,63 @@ impl AxisAlignedBoundingBox3d {
             && self.max_point.y >= other.min_point.y
             && self.min_point.z <= other.max_point.z
             && self.max_point.z >= other.min_point.z
+    }
+
+    /// Пересечение луча с AABB методом параллельных пластин.
+    ///
+    /// Возвращает параметры `(t_enter, t_exit)` вдоль луча: точки входа
+    /// и выхода. Если источник луча находится внутри AABB, `t_enter`
+    /// отрицателен. Возвращает `None`, если луч проходит мимо или AABB
+    /// целиком остался позади источника луча.
+    pub fn ray_intersection_interval(
+        &self,
+        ray: &Ray3d,
+        maybe_epsilon: Option<f32>,
+    ) -> Option<(f32, f32)> {
+        let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
+
+        let origin = ray.origin.to_array();
+        let direction = ray.direction.to_array();
+        let min_point = self.min_point.to_array();
+        let max_point = self.max_point.to_array();
+
+        let mut t_enter = f32::NEG_INFINITY;
+        let mut t_exit = f32::INFINITY;
+
+        for i in 0..3 {
+            if direction[i].abs() > epsilon {
+                // Параметры пересечения с ближней и дальней плоскостями.
+                let mut t1 = (min_point[i] - origin[i]) / direction[i];
+                let mut t2 = (max_point[i] - origin[i]) / direction[i];
+
+                if t1 > t2 {
+                    std::mem::swap(&mut t1, &mut t2);
+                }
+
+                t_enter = t_enter.max(t1);
+                t_exit = t_exit.min(t2);
+
+                // Интервалы по осям не перекрываются — луч прошёл мимо.
+                if t_enter > t_exit {
+                    return None;
+                }
+            } else if origin[i] < min_point[i] - epsilon || origin[i] > max_point[i] + epsilon {
+                // Луч параллелен пластинам и проходит вне их.
+                return None;
+            }
+        }
+
+        // AABB целиком остался позади источника луча.
+        if t_exit < 0.0 {
+            return None;
+        }
+
+        Some((t_enter, t_exit))
+    }
+
+    /// Пересекает ли луч этот AABB.
+    pub fn is_ray_intersects(&self, ray: &Ray3d, maybe_epsilon: Option<f32>) -> bool {
+        self.ray_intersection_interval(ray, maybe_epsilon).is_some()
     }
 
     /// Сбросить AABB (вернуть к дефолтному вывернутому состоянию)

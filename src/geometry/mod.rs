@@ -1,5 +1,6 @@
 mod axis_aligned_bounding_box_2d;
 mod axis_aligned_bounding_box_3d;
+mod bvh;
 mod circle_2d;
 mod constants;
 mod eig3x3;
@@ -16,6 +17,8 @@ mod tbn;
 mod triangle_3d;
 
 pub use axis_aligned_bounding_box_2d::*;
+pub use axis_aligned_bounding_box_3d::*;
+pub use bvh::*;
 pub use circle_2d::*;
 pub use infinite_line_2d::*;
 pub use kdop::*;

@@ -431,6 +431,88 @@ fn quaternion_showcases() {
     println!("Матрица вращения 4x4:\n{}", rotate);
 }
 
+/// Иерархия ограничивающих объемов (BVH)
+fn bvh_showcase() {
+    use geometry::{AxisAlignedBoundingBox3d, BoundingVolumeHierarchyNode, Ray3d, Sphere};
+    use glam::Vec3;
+
+    println!("Иерархия ограничивающих объемов (BVH)\n");
+
+    let spheres = vec![
+        Sphere::new(Vec3::new(-6.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(-2.0, 1.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(2.0, -1.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(6.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(0.0, 0.0, 8.0), 1.0),
+        Sphere::new(Vec3::new(0.0, 3.0, 4.0), 1.0),
+    ];
+
+    let root = BoundingVolumeHierarchyNode::build(spheres).unwrap();
+
+    // Инвариант дерева: границы всех ветвей — объединение границ потомков.
+    assert!(root.is_consistent(None));
+
+    let leaves: Vec<_> = root.iter().filter(|node| node.is_leaf()).collect();
+    assert_eq!(root.leaves_count(), leaves.len());
+
+    println!("Построено дерево:");
+    println!("  объектов (листьев): {}", leaves.len());
+    println!("  высота дерева: {}", root.height());
+    println!(
+        "  ветвей: {}",
+        root.iter().filter(|node| node.is_branch()).count()
+    );
+    println!(
+        "  максимальное число потомков у ветви: {}",
+        root.iter()
+            .filter(|node| node.is_branch())
+            .map(|node| node.children().len())
+            .max()
+            .unwrap_or(0)
+    );
+    println!("  AABB корня: {:?}\n", root.bounds());
+
+    println!("Листья:");
+    for node in &leaves {
+        if let Some(sphere) = node.shape() {
+            println!("  {:?}", sphere);
+        }
+    }
+
+    let area = AxisAlignedBoundingBox3d::new(Vec3::new(-3.0, -2.0, -2.0), Vec3::new(3.0, 1.5, 2.0));
+    let found = root.find_shapes_in_box(&area);
+
+    println!("Область {:?} накрывает объектов: {}", area, found.len());
+    for sphere in &found {
+        println!("  {:?}", sphere);
+    }
+
+    let ray = Ray3d {
+        origin: Vec3::new(0.0, 0.0, -20.0),
+        direction: Vec3::Z,
+    };
+    println!(
+        "\nЛуч с началом {:?} и направлением {:?}:",
+        ray.origin, ray.direction
+    );
+
+    match root.find_closest_ray_hit(&ray, None) {
+        Some((t, sphere)) => println!("  ближайшее попадание — сфера {:?}, t = {:?}", sphere, t),
+        None => println!("  попаданий нет"),
+    }
+
+    // Для проверки сравниваем результат с полным перебором всех листьев.
+    let brute_force = root
+        .shapes()
+        .filter_map(|sphere| sphere.ray_intersection(&ray, None).map(|t| (t, sphere)))
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+
+    println!(
+        "  проверка полным перебором: {:?}",
+        brute_force.map(|(t, sphere)| (t, sphere.center))
+    );
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -445,4 +527,5 @@ fn main() {
     triangles_showcase();
     cross_product_showcase();
     quaternion_showcases();
+    bvh_showcase();
 }
