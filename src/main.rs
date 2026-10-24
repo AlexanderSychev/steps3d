@@ -513,6 +513,102 @@ fn bvh_showcase() {
     );
 }
 
+/// Печать kD-дерева: у ветви видно, где хранится секущая плоскость.
+fn print_kd_tree(node: &geometry::KdTree<geometry::Sphere>, depth: usize) {
+    use geometry::KdTree;
+
+    let indent = "  ".repeat(depth);
+
+    match node {
+        KdTree::Leaf { shapes, bounds } => {
+            println!("{indent}лист: объектов {}, AABB {:?}", shapes.len(), bounds);
+            for sphere in shapes {
+                println!("{indent}  {:?}", sphere);
+            }
+        }
+        KdTree::Branch {
+            bounds,
+            split_plane,
+            straddling_shapes,
+            positive,
+            negative,
+        } => {
+            println!(
+                "{indent}ветвь: плоскость n = {:?}, d = {:?}, AABB {:?}",
+                split_plane.normal, split_plane.d, bounds
+            );
+            if !straddling_shapes.is_empty() {
+                println!("{indent}  пересекают плоскость: {:?}", straddling_shapes);
+            }
+            print_kd_tree(positive, depth + 1);
+            print_kd_tree(negative, depth + 1);
+        }
+    }
+}
+
+/// kD-дерево: секущая плоскость хранится во внутренних узлах
+fn kd_tree_showcase() {
+    use geometry::{AxisAlignedBoundingBox3d, KdTree, Ray3d, Sphere};
+    use glam::Vec3;
+
+    println!("\nkD-дерево\n");
+
+    let spheres = vec![
+        Sphere::new(Vec3::new(-8.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(-3.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::ZERO, 4.0),
+        Sphere::new(Vec3::new(3.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(8.0, 0.0, 0.0), 1.0),
+    ];
+
+    let tree = KdTree::build(spheres).unwrap();
+
+    // Проверяем инвариант и демонстрируем доступ к плоскости через API.
+    assert!(tree.is_branch());
+    assert!(tree.split_plane().is_some());
+    assert_eq!(tree.straddling_shapes().len(), 1);
+    assert!(tree.is_consistent(None));
+    assert_eq!(
+        tree.leaves_count(),
+        tree.iter().filter(|node| node.is_leaf()).count()
+    );
+
+    println!(
+        "Дерево ({} объектов, высота {}):",
+        tree.shapes().count(),
+        tree.height()
+    );
+    print_kd_tree(&tree, 1);
+
+    let area = AxisAlignedBoundingBox3d::new(Vec3::splat(-1.5), Vec3::splat(1.5));
+    let found = tree.find_shapes_in_box(&area);
+
+    println!("\nОбласть {:?} накрывает объектов: {}", area, found.len());
+    for sphere in &found {
+        println!("  {:?}", sphere);
+    }
+
+    let ray = Ray3d {
+        origin: Vec3::new(0.0, 0.0, -50.0),
+        direction: Vec3::Z,
+    };
+
+    match tree.find_closest_ray_hit(&ray, None) {
+        Some((t, sphere)) => println!("\nЛуч {:?}: сфера {:?}, t = {:?}", ray, sphere, t),
+        None => println!("\nЛуч {:?}: попаданий нет", ray),
+    }
+
+    let brute_force = tree
+        .shapes()
+        .filter_map(|sphere| sphere.ray_intersection(&ray, None).map(|t| (t, sphere)))
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+
+    println!(
+        "  проверка полным перебором: {:?}",
+        brute_force.map(|(t, sphere)| (t, sphere.center))
+    );
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -528,4 +624,5 @@ fn main() {
     cross_product_showcase();
     quaternion_showcases();
     bvh_showcase();
+    kd_tree_showcase();
 }
