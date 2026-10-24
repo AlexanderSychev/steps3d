@@ -375,6 +375,62 @@ fn cross_product_showcase() {
     println!("[a,b] = {:?}", a.cross(b));
 }
 
+fn quaternion_showcases() {
+    use glam::{Mat3, Mat4, Quat, Vec3, Vec3Swizzles, Vec4};
+
+    // 1. Базовые векторы и свиззлинг
+    let a = Vec3::new(1.0, 2.0, 3.0);
+    let b = a;
+    let c = a.xyz();
+    let d = a.xyz();
+    let e = Vec3::new(a.x, a.y, a.z);
+    let g = Vec3::ONE;
+    let h = a + b;
+
+    // 2. Скалярное, векторное произведения и 4D-векторы
+    let r = a.dot(b);
+    let p = b.cross(c);
+
+    let a4 = Vec4::new(1.0, 2.0, 3.0, 4.0);
+    let b4 = Vec4::new(a4.x, a4.y, a4.z, a4.w);
+
+    // 3. Матрицы
+    let m1 = Mat3::IDENTITY;
+    let a1 = m1 * a;
+
+    let mm = Mat3::from_cols(
+        Vec3::new(0.6, 0.2, 0.3),
+        Vec3::new(0.2, 0.7, 0.5),
+        Vec3::new(0.3, 0.5, 0.7),
+    );
+
+    let mmi = mm.inverse();
+
+    let n = Mat3::from_cols_array(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+    let t = n.transpose();
+
+    // 4. Кватернионы и вращения
+    let q1 = Quat::from_axis_angle(Vec3::Z, std::f32::consts::FRAC_PI_4);
+
+    let n_q = q1.normalize();
+    let l1 = n_q.length();
+
+    let q2 = Quat::from_xyzw(0.0, 0.0, 1.0, 1.0); // В glam порядок: x, y, z, w
+
+    // Извлечение углов Эйлера (в радианах)
+    let (roll, pitch, yaw) = q1.to_euler(glam::EulerRot::ZXY);
+    let angles = Vec3::new(roll, pitch, yaw);
+
+    // Интерполяция и преобразование в матрицу
+    let q3 = q1.slerp(q2, 0.2);
+    let rotate = Mat4::from_quat(q1);
+
+    // Выведем проверочные значения, чтобы убедиться в работе
+    println!("Вектор после умножения на единичную матрицу a1: {:?}", a1);
+    println!("Углы Эйлера (roll, pitch, yaw): {:?}", angles);
+    println!("Матрица вращения 4x4:\n{}", rotate);
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -388,4 +444,5 @@ fn main() {
     convex_polygon_showcase();
     triangles_showcase();
     cross_product_showcase();
+    quaternion_showcases();
 }
