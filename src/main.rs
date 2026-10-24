@@ -710,6 +710,75 @@ fn bsp_showcase() {
     println!("Ближние -> дальние (z): {:?}", front_order);
 }
 
+/// R-дерево: динамическая вставка объектов и запросы по AABB
+fn r_tree_showcase() {
+    use geometry::{AxisAlignedBoundingBox3d, DEFAULT_R_TREE_MAX_ENTRIES, RTree, Ray3d, Sphere};
+    use glam::Vec3;
+
+    println!("\nR-дерево\n");
+
+    let spheres = [
+        Sphere::new(Vec3::new(-8.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(-3.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::ZERO, 2.0),
+        Sphere::new(Vec3::new(3.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(8.0, 0.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(0.0, 4.0, 0.0), 1.0),
+        Sphere::new(Vec3::new(0.0, 0.0, 6.0), 1.0),
+    ];
+
+    let mut tree: RTree<Sphere> =
+        RTree::from_shapes(spheres.iter().copied().take(6), DEFAULT_R_TREE_MAX_ENTRIES);
+    tree.insert(spheres[6]);
+
+    assert!(tree.is_consistent(None));
+
+    println!(
+        "Объектов: {}, высота: {}, ёмкость узла: {}..{}",
+        tree.len(),
+        tree.height(),
+        tree.min_entries(),
+        tree.max_entries()
+    );
+    println!("AABB дерева: {:?}", tree.bounds().unwrap());
+
+    let area = AxisAlignedBoundingBox3d::new(Vec3::splat(-1.5), Vec3::splat(1.5));
+    let found = tree.find_shapes_in_box(&area);
+
+    println!("\nОбласть {:?} содержит объектов: {}", area, found.len());
+    for sphere in &found {
+        println!("  {:?}", sphere);
+    }
+
+    let ray = Ray3d {
+        origin: Vec3::new(0.0, 0.0, -20.0),
+        direction: Vec3::Z,
+    };
+
+    match tree.find_closest_ray_hit(&ray, None) {
+        Some((t, sphere)) => println!("\nЛуч {:?}: сфера {:?}, t = {:?}", ray, sphere, t),
+        None => println!("\nЛуч {:?}: попаданий нет", ray),
+    }
+
+    let brute_force = tree
+        .shapes()
+        .filter_map(|sphere| sphere.ray_intersection(&ray, None).map(|t| (t, sphere)))
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+
+    println!(
+        "  проверка полным перебором: {:?}",
+        brute_force.map(|(t, sphere)| (t, sphere.center))
+    );
+
+    tree.clear();
+    assert!(tree.is_empty());
+    println!(
+        "После clear: объектов {}, высота {}",
+        tree.len(),
+        tree.height()
+    );
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -727,4 +796,5 @@ fn main() {
     bvh_showcase();
     kd_tree_showcase();
     bsp_showcase();
+    r_tree_showcase();
 }
