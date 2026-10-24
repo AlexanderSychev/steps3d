@@ -609,6 +609,107 @@ fn kd_tree_showcase() {
     );
 }
 
+/// Квадрат в плоскости z = const для демонстрации BSP.
+fn bsp_quad(z: f32) -> geometry::Polygon3d {
+    use glam::Vec3;
+
+    geometry::Polygon3d::new(
+        vec![
+            Vec3::new(-3.0, -2.0, z),
+            Vec3::new(3.0, -2.0, z),
+            Vec3::new(3.0, 2.0, z),
+            Vec3::new(-3.0, 2.0, z),
+        ],
+        None,
+    )
+    .unwrap()
+}
+
+/// Печать BSP-дерева: в каждом узле видно рассекатель и его плоскость.
+fn print_bsp(node: &geometry::BspNode, depth: usize) {
+    let indent = "  ".repeat(depth);
+    let plane = node.split_plane();
+
+    println!(
+        "{indent}узел: n = {:?}, d = {:?}; рассекатель: вершин {}, центр {:?}, площадь {:.2}",
+        plane.normal,
+        plane.d,
+        node.splitter().vertices().len(),
+        node.splitter().center(),
+        node.splitter().area()
+    );
+
+    if let Some(positive) = node.positive() {
+        print_bsp(positive, depth + 1);
+    }
+
+    if let Some(negative) = node.negative() {
+        print_bsp(negative, depth + 1);
+    }
+}
+
+/// BSP-дерево: рекурсивное деление пространства и обход от дальних к ближним
+fn bsp_showcase() {
+    use geometry::{BspNode, Polygon3d};
+    use glam::Vec3;
+
+    println!("\nBSP-дерево\n");
+
+    let far = bsp_quad(8.0);
+    let middle = bsp_quad(0.0);
+    let near = bsp_quad(-8.0);
+
+    // Наклонный многоугольник, который пересекает плоскость z = 0.
+    let slanted = Polygon3d::new(
+        vec![
+            Vec3::new(-2.0, -2.0, -4.0),
+            Vec3::new(2.0, -2.0, 4.0),
+            Vec3::new(2.0, 2.0, 4.0),
+            Vec3::new(-2.0, 2.0, -4.0),
+        ],
+        None,
+    )
+    .unwrap();
+
+    let tree = BspNode::build(vec![far, middle, near, slanted]).unwrap();
+    assert!(tree.is_consistent(None));
+
+    println!(
+        "Узлов: {}, высота: {}, листьев: {}",
+        tree.polygons().count(),
+        tree.height(),
+        tree.leaves_count()
+    );
+    print_bsp(&tree, 1);
+
+    let observer = Vec3::new(0.0, 0.0, -20.0);
+    let mut order = Vec::new();
+
+    tree.traverse_back_to_front(observer, &mut |polygon| {
+        order.push((polygon.center(), polygon.area()));
+    });
+
+    assert_eq!(order.len(), tree.polygons().count());
+
+    println!("\nПорядок отрисовки от наблюдателя {:?}:", observer);
+    for (center, area) in order {
+        println!("  центр {:?}, площадь {:.2}", center, area);
+    }
+
+    let observer_leaf = tree.find_leaf_for_point(observer);
+    let leaf_plane = observer_leaf.split_plane();
+    println!(
+        "\nТочка наблюдателя попадает в узел с плоскостью n = {:?}, d = {:?}",
+        leaf_plane.normal, leaf_plane.d
+    );
+
+    let mut front_order = Vec::new();
+    tree.traverse_front_to_back(observer, &mut |polygon| {
+        front_order.push(polygon.center().z);
+    });
+    println!("Ближние -> дальние (z): {:?}", front_order);
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -625,4 +726,5 @@ fn main() {
     quaternion_showcases();
     bvh_showcase();
     kd_tree_showcase();
+    bsp_showcase();
 }
