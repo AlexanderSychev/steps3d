@@ -1,8 +1,8 @@
 use glam::{Mat2, Vec2, Vec2Swizzles};
 use num_complex::{Complex32, ComplexFloat};
 
-mod geometry;
 mod color;
+mod geometry;
 
 /// Проверка некоторые соответствия между библиотеками "GLM" (C++) и "glam" (Rust)
 fn glm_glam_correspondences() {
@@ -858,8 +858,8 @@ fn regular_grid_showcase() {
 }
 
 fn colors_showcase() {
-    use palette::{IntoColor, LinSrgb, Srgb};
     use color::IntoGlam;
+    use palette::{IntoColor, LinSrgb, Srgb};
 
     // 1. Создаем sRGB цвет в u8
     let color_srgb_u8 = Srgb::new(255u8, 128u8, 0u8);
