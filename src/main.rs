@@ -1,6 +1,7 @@
 use glam::{Mat2, Vec2, Vec2Swizzles};
 use num_complex::{Complex32, ComplexFloat};
 
+mod canvas;
 mod color;
 mod geometry;
 
@@ -882,6 +883,39 @@ fn colors_showcase() {
     println!("glam Vec4 для шейдера: {:?}", shader_vec4);
 }
 
+fn canvas_showcase() {
+    use canvas::Canvas;
+    use palette::Srgb;
+
+    let mut canvas = Canvas::try_new(512, 512).expect("failed to create canvas");
+    let color = Srgb::new(255u8, 255, 0);
+    let center: (usize, usize) = (256, 256);
+
+    // Лучи во все восемь октантов — так сразу видно, что алгоритм
+    // правильно обрабатывает и пологие, и крутые отрезки, и их направления.
+    let endpoints: [(usize, usize); 8] = [
+        (456, 256),
+        (400, 400),
+        (256, 456),
+        (112, 400),
+        (56, 256),
+        (112, 112),
+        (256, 56),
+        (400, 112),
+    ];
+
+    for (x, y) in endpoints {
+        canvas.draw_line(center.0, center.1, x, y, color);
+    }
+
+    std::fs::create_dir_all("generated").expect("failed to create output directory");
+    canvas
+        .write_to_file("generated/lines.tga")
+        .expect("failed to write generated/lines.tga");
+
+    println!("Отрезки сохранены в generated/lines.tga");
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -902,4 +936,5 @@ fn main() {
     r_tree_showcase();
     regular_grid_showcase();
     colors_showcase();
+    canvas_showcase();
 }
