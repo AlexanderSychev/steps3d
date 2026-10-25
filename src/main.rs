@@ -916,6 +916,23 @@ fn canvas_showcase() {
     println!("Отрезки сохранены в generated/lines.tga");
 }
 
+fn circle_showcase() {
+    use canvas::Canvas;
+    use palette::Srgb;
+
+    let mut canvas = Canvas::try_new(500, 500).expect("failed to create canvas");
+    let color = Srgb::new(255u8, 0, 255);
+
+    canvas.draw_circle(250, 250, 100, color);
+
+    std::fs::create_dir_all("generated").expect("failed to create output directory");
+    canvas
+        .write_to_file("generated/circle.tga")
+        .expect("failed to write generated/circle.tga");
+
+    println!("Окружность сохранена в generated/circle.tga");
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -937,4 +954,5 @@ fn main() {
     regular_grid_showcase();
     colors_showcase();
     canvas_showcase();
+    circle_showcase();
 }

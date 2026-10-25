@@ -119,6 +119,60 @@ impl Canvas {
         }
     }
 
+    /// Нарисовать окружность
+    ///
+    /// Порт `drawCircle2` из `Code/Chapter-7/circle.cpp`. Используется
+    /// целочисленный алгоритм Брезенхейма и восемь симметричных точек.
+    /// Пиксели, оказавшиеся за пределами холста, пропускаются.
+    pub fn draw_circle(
+        &mut self,
+        center_x: usize,
+        center_y: usize,
+        radius: usize,
+        color: Srgb<u8>,
+    ) {
+        let xc = i64::try_from(center_x).unwrap_or(i64::MAX);
+        let yc = i64::try_from(center_y).unwrap_or(i64::MAX);
+        let r = i64::try_from(radius).unwrap_or(i64::MAX);
+
+        let mut x = 0;
+        let mut y = r;
+        let mut d = 1 - r;
+        let mut delta1 = 3;
+        let mut delta2 = -2 * r + 5;
+
+        self.draw_circle_points(xc, yc, x, y, color);
+
+        while y > x {
+            if d < 0 {
+                d += delta1;
+                delta1 += 2;
+                delta2 += 2;
+                x += 1;
+            } else {
+                d += delta2;
+                delta1 += 2;
+                delta2 += 4;
+                x += 1;
+                y -= 1;
+            }
+
+            self.draw_circle_points(xc, yc, x, y, color);
+        }
+    }
+
+    /// Нарисовать восемь симметричных точек окружности.
+    fn draw_circle_points(&mut self, xc: i64, yc: i64, x: i64, y: i64, color: Srgb<u8>) {
+        self.plot(xc + x, yc + y, color);
+        self.plot(xc + y, yc + x, color);
+        self.plot(xc + y, yc - x, color);
+        self.plot(xc + x, yc - y, color);
+        self.plot(xc - x, yc - y, color);
+        self.plot(xc - y, yc - x, color);
+        self.plot(xc - y, yc + x, color);
+        self.plot(xc - x, yc + y, color);
+    }
+
     /// Сохранить содержимое холста в файл.
     pub fn write_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         self.image.write_to_file(path)
@@ -275,6 +329,38 @@ mod tests {
         canvas.draw_line(5, 1, 0, 1, white());
 
         assert_painted(&canvas, &[(0, 1), (1, 1), (2, 1)]);
+    }
+
+    #[test]
+    fn draws_circle_with_expected_points() {
+        let mut canvas = Canvas::try_new(11, 11).unwrap();
+
+        canvas.draw_circle(5, 5, 5, white());
+
+        let pixels = painted_pixels(&canvas, white());
+        assert_eq!(pixels.len(), 28);
+
+        for point in [(5, 0), (10, 5), (5, 10), (0, 5), (8, 9), (9, 8)] {
+            assert!(pixels.contains(&point), "missing circle point {point:?}");
+        }
+    }
+
+    #[test]
+    fn circle_with_zero_radius_draws_center() {
+        let mut canvas = Canvas::try_new(5, 5).unwrap();
+
+        canvas.draw_circle(2, 2, 0, white());
+
+        assert_painted(&canvas, &[(2, 2)]);
+    }
+
+    #[test]
+    fn circle_skips_pixels_outside_canvas() {
+        let mut canvas = Canvas::try_new(5, 5).unwrap();
+
+        canvas.draw_circle(0, 0, 2, white());
+
+        assert_painted(&canvas, &[(0, 2), (2, 0), (1, 2), (2, 1)]);
     }
 
     #[test]
