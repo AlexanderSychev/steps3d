@@ -2,6 +2,7 @@ use glam::{Mat2, Vec2, Vec2Swizzles};
 use num_complex::{Complex32, ComplexFloat};
 
 mod geometry;
+mod color;
 
 /// Проверка некоторые соответствия между библиотеками "GLM" (C++) и "glam" (Rust)
 fn glm_glam_correspondences() {
@@ -856,6 +857,31 @@ fn regular_grid_showcase() {
     );
 }
 
+fn colors_showcase() {
+    use palette::{IntoColor, LinSrgb, Srgb};
+    use color::IntoGlam;
+
+    // 1. Создаем sRGB цвет в u8
+    let color_srgb_u8 = Srgb::new(255u8, 128u8, 0u8);
+
+    // 2. Переводим компоненты в f32 (0.0 .. 1.0), оставаясь в нелинейном sRGB.
+    // Метод .into_format() просто делит компоненты u8 на 255.0
+    let color_srgb_f32: Srgb<f32> = color_srgb_u8.into_format();
+
+    // 3. Теперь безопасно переводим в Линейный f32 (применится формула де-гамма-коррекции)
+    let color_linear: LinSrgb<f32> = color_srgb_f32.into_color();
+
+    // 4. Конвертация в glam::Vec3.
+    // .into_components() возвращает кортеж, добавляем .into() для превращения в массив
+    let shader_vec3 = color_linear.to_glam3();
+
+    // 5. Расширяем до Vec4 с альфа-каналом (1.0 для полной непрозрачности)
+    let shader_vec4 = color_linear.to_glam4(1.0);
+
+    println!("glam Vec3 для шейдера: {:?}", shader_vec3);
+    println!("glam Vec4 для шейдера: {:?}", shader_vec4);
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -875,4 +901,5 @@ fn main() {
     bsp_showcase();
     r_tree_showcase();
     regular_grid_showcase();
+    colors_showcase();
 }
