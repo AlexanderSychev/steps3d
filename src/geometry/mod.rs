@@ -22,6 +22,7 @@ mod tbn;
 mod traits;
 mod triangle_3d;
 
+pub use constants::*;
 pub use axis_aligned_bounding_box_2d::*;
 pub use axis_aligned_bounding_box_3d::*;
 pub use bsp::*;

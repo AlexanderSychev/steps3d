@@ -4,6 +4,8 @@ use num_complex::{Complex32, ComplexFloat};
 mod canvas;
 mod color;
 mod geometry;
+mod light;
+mod ray_tracing;
 
 /// Проверка некоторые соответствия между библиотеками "GLM" (C++) и "glam" (Rust)
 fn glm_glam_correspondences() {
