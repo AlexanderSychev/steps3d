@@ -4,9 +4,9 @@ use super::material::AIR;
 use super::scene::Scene;
 use glam::Vec3;
 use palette::Srgb;
+use rayon::prelude::*;
 use std::io::Result;
 use std::path::Path;
-use rayon::prelude::*;
 
 /// Камера
 #[derive(Debug, Clone)]
@@ -76,7 +76,12 @@ impl Camera {
         })
     }
 
-    pub fn trace_frame<P: AsRef<Path>>(&mut self, scene: &Scene, file_name: P, maybe_epsilon: Option<f32>) -> Result<()> {
+    pub fn trace_frame<P: AsRef<Path>>(
+        &mut self,
+        scene: &Scene,
+        file_name: P,
+        maybe_epsilon: Option<f32>,
+    ) -> Result<()> {
         use std::f32::consts::PI;
         use std::time::Instant;
 
@@ -93,7 +98,8 @@ impl Camera {
         let width = self.width;
 
         // МАГИЯ RUST: Параллельный итератор по всем пикселям холста
-        self.canvas.pixels_mut()
+        self.canvas
+            .pixels_mut()
             .par_iter_mut() // Каждым пикселем занимается свободное ядро процессора
             .enumerate()
             .for_each(|(idx, pixel)| {
@@ -114,7 +120,10 @@ impl Camera {
             });
 
         let duration = start.elapsed();
-        println!("Время ПАРАЛЛЕЛЬНОЙ отрисовки кадра: {} миллисекунд", duration.as_millis());
+        println!(
+            "Время ПАРАЛЛЕЛЬНОЙ отрисовки кадра: {} миллисекунд",
+            duration.as_millis()
+        );
 
         self.canvas.write_to_file(file_name)
     }
@@ -152,7 +161,8 @@ impl Camera {
         let width = self.width;
 
         // Параллелим суперсэмплинг кадра
-        self.canvas.pixels_mut()
+        self.canvas
+            .pixels_mut()
             .par_iter_mut()
             .enumerate()
             .for_each(|(idx, pixel)| {
