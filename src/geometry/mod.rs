@@ -22,12 +22,12 @@ mod tbn;
 mod traits;
 mod triangle_3d;
 
-pub use constants::*;
 pub use axis_aligned_bounding_box_2d::*;
 pub use axis_aligned_bounding_box_3d::*;
 pub use bsp::*;
 pub use bvh::*;
 pub use circle_2d::*;
+pub use constants::*;
 pub use infinite_line_2d::*;
 pub use kd_tree::*;
 pub use kdop::*;

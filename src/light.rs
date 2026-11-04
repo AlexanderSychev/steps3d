@@ -1,7 +1,7 @@
 //! Модуль источников освещения.
 
-use palette::Srgb;
 use glam::Vec3;
+use palette::Srgb;
 
 /// Глобальное диффузное освещение
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -17,7 +17,11 @@ pub struct DiffuseLight {
 impl DiffuseLight {
     /// Создать новое глобальное диффузное освещение
     pub fn new(direction: Vec3, main_color: Srgb<f32>, ambient_color: Srgb<f32>) -> Self {
-        Self { direction, main_color, ambient_color }
+        Self {
+            direction,
+            main_color,
+            ambient_color,
+        }
     }
 }
 

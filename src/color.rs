@@ -200,6 +200,11 @@ impl TgaImage {
         self.write_to(writer)
     }
 
+    /// Предоставляет изменяемый доступ ко всему вектору пикселей
+    pub fn pixels_mut(&mut self) -> &mut [Srgb<u8>] {
+        &mut self.pixels
+    }
+
     fn pixel_index(&self, x: usize, y: usize) -> usize {
         assert!(
             x < self.width && y < self.height,

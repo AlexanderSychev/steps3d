@@ -49,6 +49,16 @@ impl Canvas {
         self.image.clear();
     }
 
+    /// Нарисовать отдельный пиксель.
+    ///
+    /// Пиксели, оказавшиеся за пределами холста, пропускаются.
+    pub fn draw_pixel(&mut self, x: usize, y: usize, color: Srgb<u8>) {
+        let x = i64::try_from(x).unwrap_or(i64::MAX);
+        let y = i64::try_from(y).unwrap_or(i64::MAX);
+
+        self.plot(x, y, color);
+    }
+
     /// Нарисовать отрезок целочисленным алгоритмом Брезенхейма.
     ///
     /// Порт `drawLine` из `Code/Chapter-7/line.cpp`. Алгоритм работает во всех
@@ -176,6 +186,11 @@ impl Canvas {
     /// Сохранить содержимое холста в файл.
     pub fn write_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         self.image.write_to_file(path)
+    }
+
+    /// Предоставляет изменяемый доступ к пикселям холста
+    pub fn pixels_mut(&mut self) -> &mut [Srgb<u8>] {
+        self.image.pixels_mut()
     }
 
     /// Поставить пиксель, если координаты попадают на холст.

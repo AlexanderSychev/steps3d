@@ -8,3 +8,9 @@ pub struct Ray3d {
     /// Вектор направления луча
     pub direction: Vec3,
 }
+
+impl Ray3d {
+    pub fn point_at(&self, t: f32) -> Vec3 {
+        self.origin + self.direction * t
+    }
+}
