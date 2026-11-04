@@ -959,4 +959,5 @@ fn main() {
     circle_showcase();
 
     ray_tracing::examples::base_example().unwrap();
+    ray_tracing::examples::csg_example().unwrap();
 }

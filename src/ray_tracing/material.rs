@@ -64,6 +64,22 @@ pub struct MaterialProps {
     pub medium: OpticalMedium,
 }
 
+impl Default for MaterialProps {
+    fn default() -> Self {
+        Self {
+            color: Srgb::new(0.75, 0.75, 0.75),
+            emission: Srgb::new(0.0, 0.0, 0.0),
+            shininess: 30.0,
+            ambient_coeff: 0.2,
+            diffuse_coeff: 0.5,
+            specular_coeff: 0.6,
+            reflection_coeff: 0.3,
+            transmission_coeff: 0.0,
+            medium: OpticalMedium::default(),
+        }
+    }
+}
+
 /// Параметры освещаемой поверхности в точке
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SurfaceData {
