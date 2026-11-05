@@ -279,7 +279,7 @@ pub fn csg_box_all_intersections(
         std::mem::swap(&mut t1, &mut t2);
     }
 
-    let mut get_hit_data = |t: f32| {
+    let get_hit_data = |t: f32| {
         let pos = ray.origin + ray.direction * t;
         let mut normal = Vec3::ZERO;
         let bias = 1e-4;
