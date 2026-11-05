@@ -58,6 +58,65 @@ pub trait Object {
     fn get_surface(&self, hit_data: &HitData) -> SurfaceData;
 }
 
+/// Найти интервал пересечения луча с AABB вместе с нормалями его граней.
+/// Параллельные оси обрабатываются отдельно, чтобы не получать `0 * infinity = NaN`.
+pub(super) fn ray_aabb_interval(
+    min: Vec3,
+    max: Vec3,
+    ray: &Ray3d,
+) -> Option<(f32, Vec3, f32, Vec3)> {
+    if ray.direction.length_squared() == 0.0
+        || !ray.origin.is_finite()
+        || !ray.direction.is_finite()
+        || !min.is_finite()
+        || !max.is_finite()
+    {
+        return None;
+    }
+
+    let mut t_near = f32::NEG_INFINITY;
+    let mut t_far = f32::INFINITY;
+    let mut normal_near = Vec3::ZERO;
+    let mut normal_far = Vec3::ZERO;
+
+    for axis in 0..3 {
+        let origin = ray.origin[axis];
+        let direction = ray.direction[axis];
+        if direction == 0.0 {
+            if origin < min[axis] || origin > max[axis] {
+                return None;
+            }
+            continue;
+        }
+
+        let mut t0 = (min[axis] - origin) / direction;
+        let mut t1 = (max[axis] - origin) / direction;
+        let mut n0 = Vec3::ZERO;
+        let mut n1 = Vec3::ZERO;
+        n0[axis] = -1.0;
+        n1[axis] = 1.0;
+
+        if t0 > t1 {
+            std::mem::swap(&mut t0, &mut t1);
+            std::mem::swap(&mut n0, &mut n1);
+        }
+
+        if t0 > t_near {
+            t_near = t0;
+            normal_near = n0;
+        }
+        if t1 < t_far {
+            t_far = t1;
+            normal_far = n1;
+        }
+        if t_near > t_far {
+            return None;
+        }
+    }
+
+    Some((t_near, normal_near, t_far, normal_far))
+}
+
 /// Сфера
 #[derive(Debug, Clone)]
 pub struct Sphere {
@@ -81,45 +140,38 @@ impl Sphere {
 impl Object for Sphere {
     fn intersect(&self, ray: &Ray3d, maybe_epsilon: Option<f32>) -> Option<HitData> {
         let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
-        let l = self.center - ray.origin;
-        let l2oc = l.dot(l);
-        let tca = l.dot(ray.direction);
-        let t2hc = self.radius_sq - l2oc + tca * tca;
-
-        if t2hc <= 0.0 {
+        let direction_length_sq = ray.direction.length_squared();
+        if direction_length_sq == 0.0 || !direction_length_sq.is_finite() {
             return None;
         }
 
-        let t2hc_sqrt = f32::sqrt(t2hc);
-        let t1: f32;
-        let t2: f32;
-
-        if tca < t2hc_sqrt {
-            t1 = tca + t2hc_sqrt;
-            t2 = tca - t2hc_sqrt;
-        } else {
-            t1 = tca - t2hc_sqrt;
-            t2 = tca + t2hc_sqrt;
+        let offset = ray.origin - self.center;
+        let half_b = offset.dot(ray.direction);
+        let c = offset.length_squared() - self.radius_sq;
+        let discriminant = half_b * half_b - direction_length_sq * c;
+        if discriminant < 0.0 {
+            return None;
         }
 
-        let mut final_t = t1;
-        if f32::abs(final_t) < epsilon {
-            final_t = t2;
+        let root = f32::sqrt(discriminant);
+        let mut t = (-half_b - root) / direction_length_sq;
+        let other_t = (-half_b + root) / direction_length_sq;
+        if t <= epsilon {
+            t = other_t;
+        }
+        if t <= epsilon {
+            return None;
         }
 
-        if final_t > epsilon {
-            let position = ray.point_at(final_t);
-            Some(HitData {
-                position,
-                t: final_t,
-                invert_normal: false,
-                object_index: 0,
-                material: self.def_surface,
-                normal: (position - self.center).normalize(),
-            })
-        } else {
-            None
-        }
+        let position = ray.point_at(t);
+        Some(HitData {
+            position,
+            t,
+            invert_normal: false,
+            object_index: 0,
+            material: self.def_surface,
+            normal: (position - self.center).normalize(),
+        })
     }
 
     fn get_surface(&self, hit_data: &HitData) -> SurfaceData {
@@ -141,8 +193,14 @@ pub struct Plane {
 
 impl Plane {
     pub fn new(normal: Vec3, d: f32, def_surface: MaterialProps) -> Self {
+        let length = normal.length();
+        let (normal, d) = if length > 0.0 && length.is_finite() {
+            (normal / length, d / length)
+        } else {
+            (Vec3::ZERO, d)
+        };
         Self {
-            normal: normal.normalize(),
+            normal,
             d,
             def_surface,
         }
@@ -287,83 +345,20 @@ impl Aabb {
 impl Object for Aabb {
     fn intersect(&self, ray: &Ray3d, maybe_epsilon: Option<f32>) -> Option<HitData> {
         let epsilon = maybe_epsilon.unwrap_or(DEFAULT_GEOMETRY_EPSILON);
-        let inv_dir = Vec3::new(
-            1.0 / ray.direction.x,
-            1.0 / ray.direction.y,
-            1.0 / ray.direction.z,
-        );
+        let (t_near, normal_near, t_far, normal_far) = ray_aabb_interval(self.min, self.max, ray)?;
 
-        let mut tmin = (self.min.x - ray.origin.x) * inv_dir.x;
-        let mut tmax = (self.max.x - ray.origin.x) * inv_dir.x;
-        if inv_dir.x < 0.0 {
-            std::mem::swap(&mut tmin, &mut tmax);
-        }
-
-        let mut tymin = (self.min.y - ray.origin.y) * inv_dir.y;
-        let mut tymax = (self.max.y - ray.origin.y) * inv_dir.y;
-        if inv_dir.y < 0.0 {
-            std::mem::swap(&mut tymin, &mut tymax);
-        }
-
-        if (tmin > tymax) || (tymin > tmax) {
-            return None;
-        }
-        if tymin > tmin {
-            tmin = tymin;
-        }
-        if tymax < tmax {
-            tmax = tymax;
-        }
-
-        let mut tzmin = (self.min.z - ray.origin.z) * inv_dir.z;
-        let mut tzmax = (self.max.z - ray.origin.z) * inv_dir.z;
-        if inv_dir.z < 0.0 {
-            std::mem::swap(&mut tzmin, &mut tzmax);
-        }
-
-        if (tmin > tzmax) || (tzmin > tmax) {
-            return None;
-        }
-        if tzmin > tmin {
-            tmin = tzmin;
-        }
-        if tzmax < tmax {
-            tmax = tzmax;
-        }
-
-        let mut final_t = tmin;
-        if final_t < epsilon {
-            final_t = tmax;
-            if final_t < epsilon {
-                return None;
-            }
-        }
-
-        let position = ray.origin + ray.direction * final_t;
-        let mut calculated_normal = Vec3::ZERO;
-        let bias = 1e-4;
-
-        // ИСПРАВЛЕНО: Добавлен дефолтный fallback (Vec3::Y), если точка попала точно на ребро
-        if f32::abs(position.x - self.min.x) < bias {
-            calculated_normal.x = -1.0;
-        } else if f32::abs(position.x - self.max.x) < bias {
-            calculated_normal.x = 1.0;
-        } else if f32::abs(position.y - self.min.y) < bias {
-            calculated_normal.y = -1.0;
-        } else if f32::abs(position.y - self.max.y) < bias {
-            calculated_normal.y = 1.0;
-        } else if f32::abs(position.z - self.min.z) < bias {
-            calculated_normal.z = -1.0;
-        } else if f32::abs(position.z - self.max.z) < bias {
-            calculated_normal.z = 1.0;
+        let (t, normal) = if t_near > epsilon {
+            (t_near, normal_near)
+        } else if t_far > epsilon {
+            (t_far, normal_far)
         } else {
-            calculated_normal.y = 1.0;
-        }
+            return None;
+        };
 
         Some(HitData {
-            position,
-            normal: calculated_normal.normalize(),
-            t: final_t,
+            position: ray.point_at(t),
+            normal,
+            t,
             invert_normal: false,
             object_index: 0,
             material: self.def_surface,
@@ -376,5 +371,50 @@ impl Object for Aabb {
             normal: hit_data.normal,
             material: hit_data.material,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sphere_intersection_supports_non_unit_ray_direction() {
+        let sphere = Sphere::new(Vec3::ZERO, 1.0, MaterialProps::default());
+        let ray = Ray3d {
+            origin: Vec3::new(-3.0, 0.0, 0.0),
+            direction: Vec3::new(2.0, 0.0, 0.0),
+        };
+
+        let hit = sphere.intersect(&ray, None).unwrap();
+
+        assert!((hit.t - 1.0).abs() < 1e-6);
+        assert_eq!(hit.position, Vec3::new(-1.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn plane_normalization_preserves_plane_location() {
+        let plane = Plane::new(Vec3::new(0.0, 2.0, 0.0), -4.0, MaterialProps::default());
+
+        assert_eq!(plane.normal, Vec3::Y);
+        assert!((plane.d + 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn aabb_handles_parallel_ray_on_box_face() {
+        let aabb = Aabb::new(
+            Vec3::splat(-1.0),
+            Vec3::splat(1.0),
+            MaterialProps::default(),
+        );
+        let ray = Ray3d {
+            origin: Vec3::new(-1.0, 0.0, -2.0),
+            direction: Vec3::Z,
+        };
+
+        let hit = aabb.intersect(&ray, None).unwrap();
+
+        assert!((hit.t - 1.0).abs() < 1e-6);
+        assert_eq!(hit.normal, -Vec3::Z);
     }
 }

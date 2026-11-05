@@ -212,7 +212,7 @@ impl Scene {
                     direction: transmit_dir.normalize(),
                 };
 
-                // Если луч входит, меняем среду на внутреннюю среду объекта. Если выходит — вокруг воздух (AIR)
+                // При входе переходим в материал объекта, при выходе — в воздух.
                 let next_medium = if entering {
                     surface.material.medium
                 } else {
@@ -227,6 +227,16 @@ impl Scene {
                     maybe_epsilon,
                 );
                 final_color = final_color + transmitted_color * surface.material.transmission_coeff;
+            } else {
+                // При полном внутреннем отражении вся доля transmission отражается.
+                let reflect_dir = v - surface.normal * (2.0 * vn);
+                let reflect_ray = Ray3d {
+                    origin: hit.position,
+                    direction: reflect_dir.normalize(),
+                };
+                let reflected_color =
+                    self.trace(cur_medium, t_weight, depth + 1, &reflect_ray, maybe_epsilon);
+                final_color = final_color + reflected_color * surface.material.transmission_coeff;
             }
         }
 
@@ -235,5 +245,50 @@ impl Scene {
 
     pub fn get_background(&self, ray: &Ray3d) -> Srgb<f32> {
         self.background.get_background(ray)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ray_tracing::material::{GLASS, MaterialProps};
+    use glam::Vec3;
+
+    #[test]
+    fn total_internal_reflection_redirects_transmitted_energy() {
+        let scene = Scene::default();
+        let material = MaterialProps {
+            color: Srgb::new(0.0, 0.0, 0.0),
+            emission: Srgb::new(0.0, 0.0, 0.0),
+            ambient_coeff: 0.0,
+            diffuse_coeff: 0.0,
+            specular_coeff: 0.0,
+            reflection_coeff: 0.0,
+            transmission_coeff: 1.0,
+            medium: GLASS,
+            ..MaterialProps::default()
+        };
+        let ray = Ray3d {
+            origin: Vec3::ZERO,
+            direction: Vec3::new(0.9, 0.0, 0.4358899).normalize(),
+        };
+        let hit = HitData {
+            position: Vec3::ZERO,
+            normal: Vec3::Z,
+            t: 1.0,
+            invert_normal: false,
+            object_index: 0,
+            material,
+        };
+        let mut surface = SurfaceData {
+            position: hit.position,
+            normal: hit.normal,
+            material,
+        };
+
+        let color = scene.shade(GLASS, 1.0, 1, &ray, &hit, &mut surface, None);
+
+        assert!(color.green > 0.4);
+        assert!(color.blue > 0.4);
     }
 }

@@ -134,23 +134,16 @@ impl Object for CsgObject {
 
         self.all_intersections(ray, epsilon, &mut segments);
 
-        if segments.is_empty() {
-            return None;
+        let endpoint = segments
+            .iter()
+            .flat_map(|segment| [&segment.start, &segment.end])
+            .filter(|endpoint| endpoint.t > epsilon && endpoint.t.is_finite())
+            .min_by(|a, b| a.t.total_cmp(&b.t))?;
+        let mut hit = endpoint.hit;
+        if endpoint.invert {
+            hit.normal = -hit.normal;
         }
-
-        let first_seg = &segments[0];
-
-        if first_seg.start.t > epsilon {
-            Some(first_seg.start.hit)
-        } else if first_seg.end.t > epsilon {
-            let mut exit_hit = first_seg.end.hit;
-            if first_seg.end.invert {
-                exit_hit.normal = -exit_hit.normal;
-            }
-            Some(exit_hit)
-        } else {
-            None
-        }
+        Some(hit)
     }
 
     fn get_surface(&self, hit_data: &HitData) -> SurfaceData {
@@ -172,29 +165,34 @@ pub fn csg_sphere_all_intersections(
     epsilon: f32,
     res: &mut Vec<RaySegment>,
 ) -> bool {
-    let l = center - ray.origin;
-    let l2oc = l.dot(l);
-    let tca = l.dot(ray.direction);
-    let t2hc = radius_sq - l2oc + tca * tca;
-
-    if t2hc <= 0.0 {
+    if !radius.is_finite() || radius <= 0.0 || !radius_sq.is_finite() || radius_sq <= 0.0 {
+        return false;
+    }
+    let direction_length_sq = ray.direction.length_squared();
+    if direction_length_sq == 0.0 || !direction_length_sq.is_finite() {
         return false;
     }
 
-    let t2hc_sqrt = f32::sqrt(t2hc);
-    let mut t1 = tca - t2hc_sqrt;
-    let mut t2 = tca + t2hc_sqrt;
+    let offset = ray.origin - center;
+    let half_b = offset.dot(ray.direction);
+    let c = offset.length_squared() - radius_sq;
+    let discriminant = half_b * half_b - direction_length_sq * c;
+    if discriminant < 0.0 {
+        return false;
+    }
 
+    let root = f32::sqrt(discriminant);
+    let mut t1 = (-half_b - root) / direction_length_sq;
+    let mut t2 = (-half_b + root) / direction_length_sq;
+    if t1 > t2 {
+        std::mem::swap(&mut t1, &mut t2);
+    }
     if t1 < epsilon && t2 < epsilon {
         return false;
     }
 
-    if t1 > t2 {
-        std::mem::swap(&mut t1, &mut t2);
-    }
-
-    let pos_start = ray.origin + ray.direction * t1;
-    let pos_end = ray.origin + ray.direction * t2;
+    let pos_start = ray.point_at(t1);
+    let pos_end = ray.point_at(t2);
 
     let mut hit_start = HitData::new_blank(t1, material);
     hit_start.position = pos_start;
@@ -228,80 +226,18 @@ pub fn csg_box_all_intersections(
     epsilon: f32,
     res: &mut Vec<RaySegment>,
 ) -> bool {
-    let inv_dir = Vec3::new(
-        1.0 / ray.direction.x,
-        1.0 / ray.direction.y,
-        1.0 / ray.direction.z,
-    );
-
-    let mut t1 = (min.x - ray.origin.x) * inv_dir.x;
-    let mut t2 = (max.x - ray.origin.x) * inv_dir.x;
-    if inv_dir.x < 0.0 {
-        std::mem::swap(&mut t1, &mut t2);
-    }
-
-    let mut ty1 = (min.y - ray.origin.y) * inv_dir.y;
-    let mut ty2 = (max.y - ray.origin.y) * inv_dir.y;
-    if inv_dir.y < 0.0 {
-        std::mem::swap(&mut ty1, &mut ty2);
-    }
-
-    if (t1 > ty2) || (ty1 > t2) {
-        return false;
-    }
-    if ty1 > t1 {
-        t1 = ty1;
-    }
-    if ty2 < t2 {
-        t2 = ty2;
-    }
-
-    let mut tz1 = (min.z - ray.origin.z) * inv_dir.z;
-    let mut tz2 = (max.z - ray.origin.z) * inv_dir.z;
-    if inv_dir.z < 0.0 {
-        std::mem::swap(&mut tz1, &mut tz2);
-    }
-
-    if (t1 > tz2) || (tz1 > t2) {
-        return false;
-    }
-    if tz1 > t1 {
-        t1 = tz1;
-    }
-    if tz2 < t2 {
-        t2 = tz2;
-    }
-
+    let (t1, normal1, t2, normal2) = match super::object::ray_aabb_interval(min, max, ray) {
+        Some(interval) => interval,
+        None => return false,
+    };
     if t1 < epsilon && t2 < epsilon {
         return false;
     }
-    if t1 > t2 {
-        std::mem::swap(&mut t1, &mut t2);
-    }
 
-    let get_hit_data = |t: f32| {
-        let pos = ray.origin + ray.direction * t;
-        let mut normal = Vec3::ZERO;
-        let bias = 1e-4;
-        if f32::abs(pos.x - min.x) < bias {
-            normal.x = -1.0;
-        } else if f32::abs(pos.x - max.x) < bias {
-            normal.x = 1.0;
-        } else if f32::abs(pos.y - min.y) < bias {
-            normal.y = -1.0;
-        } else if f32::abs(pos.y - max.y) < bias {
-            normal.y = 1.0;
-        } else if f32::abs(pos.z - min.z) < bias {
-            normal.z = -1.0;
-        } else if f32::abs(pos.z - max.z) < bias {
-            normal.z = 1.0;
-        } else {
-            normal.y = 1.0;
-        }
-
+    let get_hit_data = |t: f32, normal: Vec3| {
         let mut hit = HitData::new_blank(t, material);
-        hit.position = pos;
-        hit.normal = normal.normalize();
+        hit.position = ray.point_at(t);
+        hit.normal = normal;
         hit
     };
 
@@ -309,12 +245,12 @@ pub fn csg_box_all_intersections(
         start: Endpoint {
             t: t1,
             invert: false,
-            hit: get_hit_data(t1),
+            hit: get_hit_data(t1, normal1),
         },
         end: Endpoint {
             t: t2,
             invert: false,
-            hit: get_hit_data(t2),
+            hit: get_hit_data(t2, normal2),
         },
     });
     true
@@ -322,58 +258,76 @@ pub fn csg_box_all_intersections(
 
 /* --- Реализация алгоритмов комбинирования булевых сегментов --- */
 
+fn sort_segments(segments: &mut Vec<RaySegment>) {
+    segments.retain(|segment| {
+        segment.start.t.is_finite() && segment.end.t.is_finite() && !segment.is_empty()
+    });
+    segments.sort_by(|a, b| a.start.t.total_cmp(&b.start.t));
+}
+
+fn merge_overlapping_segments(segments: &mut Vec<RaySegment>) {
+    sort_segments(segments);
+    let mut merged: Vec<RaySegment> = Vec::with_capacity(segments.len());
+
+    for segment in segments.drain(..) {
+        if let Some(last) = merged.last_mut() {
+            if segment.start.t <= last.end.t {
+                if segment.end.t > last.end.t {
+                    last.end = segment.end;
+                }
+                continue;
+            }
+        }
+        merged.push(segment);
+    }
+
+    *segments = merged;
+}
+
 pub fn csg_and(a: &[RaySegment], b: &[RaySegment], c: &mut Vec<RaySegment>) {
     c.clear();
     for seg_a in a {
         for seg_b in b {
-            let mut s = *seg_a;
-            s.intersect(seg_b);
-            if !s.is_empty() {
-                c.push(s);
+            let mut segment = *seg_a;
+            segment.intersect(seg_b);
+            if !segment.is_empty() {
+                c.push(segment);
             }
         }
     }
+    merge_overlapping_segments(c);
 }
 
 pub fn csg_or(a: &[RaySegment], b: &[RaySegment], c: &mut Vec<RaySegment>) {
     c.clear();
     c.extend_from_slice(a);
-    for seg_b in b {
-        let mut merged = false;
-        for seg_c in c.iter_mut() {
-            if seg_c.intersects(seg_b) {
-                seg_c.merge(seg_b);
-                merged = true;
-                break;
-            }
-        }
-        if !merged {
-            c.push(*seg_b);
-        }
-    }
-    c.sort_by(|x, y| x.start.t.partial_cmp(&y.start.t).unwrap());
+    c.extend_from_slice(b);
+    merge_overlapping_segments(c);
 }
 
 pub fn csg_sub(a: &[RaySegment], b: &[RaySegment], c: &mut Vec<RaySegment>) {
     c.clear();
+    let mut right_segments = b.to_vec();
+    sort_segments(&mut right_segments);
+
     for seg_a in a {
         let mut current_segments = vec![*seg_a];
-        for seg_b in b {
+        for seg_b in &right_segments {
             let mut next_segments = Vec::new();
-            for s in current_segments {
-                if !s.intersects(seg_b) {
-                    next_segments.push(s);
+            for segment in current_segments {
+                if !segment.intersects(seg_b) {
+                    next_segments.push(segment);
                 } else {
-                    if s.start.t < seg_b.start.t {
-                        let mut left = s;
+                    if segment.start.t < seg_b.start.t {
+                        let mut left = segment;
                         left.end = seg_b.start;
                         left.end.invert = !left.end.invert;
                         if !left.is_empty() {
                             next_segments.push(left);
                         }
                     }
-                    if s.end.t > seg_b.end.t {
-                        let mut right = s;
+                    if segment.end.t > seg_b.end.t {
+                        let mut right = segment;
                         right.start = seg_b.end;
                         right.start.invert = !right.start.invert;
                         if !right.is_empty() {
@@ -385,5 +339,113 @@ pub fn csg_sub(a: &[RaySegment], b: &[RaySegment], c: &mut Vec<RaySegment>) {
             current_segments = next_segments;
         }
         c.extend(current_segments);
+    }
+    sort_segments(c);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn segment(start: f32, end: f32) -> RaySegment {
+        let material = MaterialProps::default();
+        let mut start_hit = HitData::new_blank(start, material);
+        start_hit.normal = -Vec3::X;
+        let mut end_hit = HitData::new_blank(end, material);
+        end_hit.normal = Vec3::X;
+        RaySegment {
+            start: Endpoint {
+                t: start,
+                invert: false,
+                hit: start_hit,
+            },
+            end: Endpoint {
+                t: end,
+                invert: false,
+                hit: end_hit,
+            },
+        }
+    }
+
+    #[test]
+    fn csg_or_merges_intervals_that_bridge_multiple_segments() {
+        let left = [segment(1.0, 2.0), segment(5.0, 6.0)];
+        let bridge = [segment(1.5, 5.5)];
+        let mut result = Vec::new();
+
+        csg_or(&left, &bridge, &mut result);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!((result[0].start.t, result[0].end.t), (1.0, 6.0));
+    }
+
+    #[test]
+    fn csg_subtraction_inverts_normal_at_inner_entry_boundary() {
+        let material = MaterialProps::default();
+        let object = CsgObject::Composite {
+            op1: Box::new(CsgObject::Sphere {
+                center: Vec3::ZERO,
+                radius: 3.0,
+                radius_sq: 9.0,
+                material,
+            }),
+            op2: Box::new(CsgObject::Sphere {
+                center: Vec3::ZERO,
+                radius: 1.0,
+                radius_sq: 1.0,
+                material,
+            }),
+            operation: CsgOperation::Sub,
+        };
+        let ray = Ray3d {
+            origin: Vec3::ZERO,
+            direction: Vec3::X,
+        };
+
+        let hit = object.intersect(&ray, None).unwrap();
+
+        assert!((hit.t - 1.0).abs() < 1e-6);
+        assert_eq!(hit.normal, -Vec3::X);
+    }
+
+    #[test]
+    fn csg_box_handles_parallel_ray_on_box_face() {
+        let mut result = Vec::new();
+        let ray = Ray3d {
+            origin: Vec3::new(-1.0, 0.0, -2.0),
+            direction: Vec3::Z,
+        };
+
+        assert!(csg_box_all_intersections(
+            Vec3::splat(-1.0),
+            Vec3::splat(1.0),
+            MaterialProps::default(),
+            &ray,
+            1e-4,
+            &mut result,
+        ));
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].start.hit.normal, -Vec3::Z);
+    }
+
+    #[test]
+    fn csg_sphere_intersection_supports_non_unit_ray_direction() {
+        let mut result = Vec::new();
+        let ray = Ray3d {
+            origin: Vec3::new(-3.0, 0.0, 0.0),
+            direction: Vec3::new(2.0, 0.0, 0.0),
+        };
+
+        assert!(csg_sphere_all_intersections(
+            Vec3::ZERO,
+            1.0,
+            1.0,
+            MaterialProps::default(),
+            &ray,
+            1e-4,
+            &mut result,
+        ));
+        assert!((result[0].start.t - 1.0).abs() < 1e-6);
+        assert_eq!(result[0].start.hit.position, Vec3::new(-1.0, 0.0, 0.0));
     }
 }
