@@ -1,6 +1,6 @@
 use palette::Srgb;
 use sdl2::{
-    EventPump, Sdl, VideoSubsystem, init,
+    EventPump, Sdl, init,
     pixels::PixelFormatEnum,
     render::{Canvas, Texture, TextureCreator},
     video::{Window, WindowContext},
@@ -10,10 +10,6 @@ use std::time::Instant;
 
 /// SDL-окно с CPU-буфером кадра.
 pub struct Application {
-    /// Контекст библиотеки SDL.
-    context: Sdl,
-    /// Подсистема видео.
-    video_subsystem: VideoSubsystem,
     /// Холст SDL для вывода готового кадра.
     canvas: Canvas<Window>,
     /// Ширина экрана
@@ -22,6 +18,8 @@ pub struct Application {
     height: u32,
     /// Пиксели в формате RGB24, построчно сверху вниз.
     pixels: Vec<u8>,
+    /// Контекст библиотеки SDL должен жить дольше окна и холста.
+    context: Sdl,
 }
 
 impl Application {
@@ -45,13 +43,14 @@ impl Application {
 
         let context = init().map_err(|msg| simple_error!(msg))?;
         let video_subsystem = context.video().map_err(|msg| simple_error!(msg))?;
+
         let window = video_subsystem
             .window(title, width, height)
-            .opengl()
             .resizable()
             .position_centered()
             .build()
             .map_err(|err| simple_error!(err.to_string()))?;
+
         let canvas = window
             .into_canvas()
             .build()
@@ -59,17 +58,11 @@ impl Application {
 
         Ok(Application {
             context,
-            video_subsystem,
             canvas,
             width,
             height,
             pixels,
         })
-    }
-
-    /// Создать новое оконное приложение.
-    pub fn new(title: &str, width: u32, height: u32) -> Application {
-        Self::try_new(title, width, height).unwrap()
     }
 
     /// Ширина буфера кадра в пикселях.

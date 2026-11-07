@@ -7,7 +7,10 @@ mod canvas;
 mod color;
 mod geometry;
 mod light;
+mod logger;
+mod opengl;
 mod ray_tracing;
+mod sdl_window;
 
 /// Проверка некоторые соответствия между библиотеками "GLM" (C++) и "glam" (Rust)
 fn glm_glam_correspondences() {
@@ -986,30 +989,62 @@ fn sdl_main() -> SimpleResult<()> {
     Ok(())
 }
 
-fn main() {
-    glm_glam_correspondences();
-    complex_laws();
-    straight_line();
-    classify_point_2d_showcase();
-    classify_circle_showcase();
-    classify_aabb_showcase();
-    point_aabb_distance_showcase();
-    infinite_line_2d_showcase();
-    triangle_square_showcase();
-    convex_polygon_showcase();
-    triangles_showcase();
-    cross_product_showcase();
-    quaternion_showcases();
-    bvh_showcase();
-    kd_tree_showcase();
-    bsp_showcase();
-    r_tree_showcase();
-    regular_grid_showcase();
-    colors_showcase();
-    canvas_showcase();
-    circle_showcase();
+fn main() -> SimpleResult<()> {
+    use sdl2::event::Event;
+    use sdl2::keyboard::Keycode;
+    use std::time::{Duration, Instant};
 
-    ray_tracing::examples::csg_example().unwrap();
+    logger::init_logger()?;
 
-    sdl_main().unwrap();
+    let window = sdl_window::SdlGlWindow::try_new("Steps 3D - OpenGL", 1024, 768)?;
+    opengl::load_with(|name| window.gl_get_proc_address(name));
+
+    let _debug_logger = if opengl::log::supports_debug_output() {
+        Some(opengl::log::attach_log(
+            |source, message_type, id, severity, message| {
+                use log::{debug, info, trace, warn};
+                let text = format!(
+                    "[OPENGL][#{}][SOURCE: {:?}][TYPE: {:?}]: {}",
+                    id, source, message_type, message
+                );
+                match severity {
+                    opengl::log::DebugLogSeverity::DebugSeverityHigh => warn!("{}", text),
+                    opengl::log::DebugLogSeverity::DebugSeverityMedium => info!("{}", text),
+                    opengl::log::DebugLogSeverity::DebugSeverityLow => debug!("{}", text),
+                    opengl::log::DebugLogSeverity::DebugSeverityNotification => trace!("{}", text),
+                }
+            },
+        )?)
+    } else {
+        log::warn!("OpenGL debug output is not supported by this context");
+        None
+    };
+
+    const TARGET_FRAME_TIME: Duration = Duration::from_nanos(16_666_667);
+    let mut frame_delta = app::FrameDelta::default();
+    let mut event_pump = window.event_pump()?;
+    'running: loop {
+        let frame_start = Instant::now();
+
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => break 'running,
+                Event::KeyDown { keycode, .. } => {
+                    if keycode == Some(Keycode::Escape) {
+                        break 'running;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let remaining = TARGET_FRAME_TIME.saturating_sub(frame_start.elapsed());
+        if !remaining.is_zero() {
+            std::thread::sleep(remaining);
+        }
+
+        frame_delta.tick();
+    }
+
+    Ok(())
 }

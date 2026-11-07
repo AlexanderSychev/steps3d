@@ -12,3 +12,6 @@ rand = "0.10.3"
 rayon = "1.12.0"
 gl = "0.14.0"
 sdl2 = "0.38.0"
+log = "0.4.35"
+simplelog = "0.12.2"
+strum = { version = "0.28.0", features = ["derive"] }
