@@ -19,8 +19,8 @@ pub use scene::*;
 pub mod examples {
     use std::io::Result;
 
-    /// Базовый пример
-    pub fn base_example() -> Result<()> {
+    /// Базовый пример. Возвращает отрендеренную камеру, чтобы кадр можно было показать в SDL.
+    pub fn base_example() -> Result<super::Camera> {
         use super::{
             Camera, GLASS, LightSource, LightSourceKind, MaterialProps, NewCameraParams, Plane,
             Scene, Sphere,
@@ -104,7 +104,7 @@ pub mod examples {
             "Рендеринг завершен, файл 'generated/ray-tracing-base-example.tga' успешно сохранен."
         );
 
-        Ok(())
+        Ok(camera)
     }
 
     /// Пример с CSG (конструктивная сплошная геометрия)

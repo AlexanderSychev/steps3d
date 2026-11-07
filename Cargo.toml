@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-glam = "0.34.1"
+glam = "0.34.2"
 num-complex = "0.4.6"
 simple-error = "0.3.3"
 palette = "0.7.7"
 rand = "0.10.3"
 rayon = "1.12.0"
+gl = "0.14.0"
+sdl2 = "0.38.0"

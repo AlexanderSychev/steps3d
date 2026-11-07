@@ -1,6 +1,8 @@
 use glam::{Mat2, Vec2, Vec2Swizzles};
 use num_complex::{Complex32, ComplexFloat};
+use simple_error::SimpleResult;
 
+mod app;
 mod canvas;
 mod color;
 mod geometry;
@@ -935,6 +937,55 @@ fn circle_showcase() {
     println!("Окружность сохранена в generated/circle.tga");
 }
 
+fn sdl_main() -> SimpleResult<()> {
+    use sdl2::event::Event;
+    use sdl2::keyboard::Keycode;
+    use simple_error::simple_error;
+    use std::time::{Duration, Instant};
+
+    const TARGET_FRAME_TIME: Duration = Duration::from_nanos(16_666_667);
+
+    let camera =
+        ray_tracing::examples::base_example().map_err(|err| simple_error!(err.to_string()))?;
+    let width = u32::try_from(camera.width).map_err(|err| simple_error!(err.to_string()))?;
+    let height = u32::try_from(camera.height).map_err(|err| simple_error!(err.to_string()))?;
+    let mut app = app::Application::try_new("Steps 3D - Ray tracing", width, height)?;
+    app.set_pixels(camera.canvas.image().pixels())?;
+
+    let texture_creator = app.texture_creator();
+    let mut texture = texture_creator
+        .create_texture_streaming(app::Application::pixel_format(), app.width(), app.height())
+        .map_err(|err| simple_error!(err.to_string()))?;
+    app.present(&mut texture)?;
+
+    let mut frame_delta = app::FrameDelta::default();
+    let mut event_pump = app.event_pump()?;
+    'running: loop {
+        let frame_start = Instant::now();
+
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => break 'running,
+                Event::KeyDown { keycode, .. } => {
+                    if keycode == Some(Keycode::Escape) {
+                        break 'running;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let remaining = TARGET_FRAME_TIME.saturating_sub(frame_start.elapsed());
+        if !remaining.is_zero() {
+            std::thread::sleep(remaining);
+        }
+
+        frame_delta.tick();
+    }
+
+    Ok(())
+}
+
 fn main() {
     glm_glam_correspondences();
     complex_laws();
@@ -958,6 +1009,7 @@ fn main() {
     canvas_showcase();
     circle_showcase();
 
-    ray_tracing::examples::base_example().unwrap();
     ray_tracing::examples::csg_example().unwrap();
+
+    sdl_main().unwrap();
 }
