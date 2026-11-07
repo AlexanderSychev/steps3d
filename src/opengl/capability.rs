@@ -17,6 +17,7 @@ pub enum Capability {
     ClipDistance6 = gl::CLIP_DISTANCE6,
     ClipDistance7 = gl::CLIP_DISTANCE7,
     ColorLogicOp = gl::COLOR_LOGIC_OP,
+    /// Отсечение нелицевых граней
     CullFace = gl::CULL_FACE,
     /// Отладочные логи
     DebugOutput = gl::DEBUG_OUTPUT,

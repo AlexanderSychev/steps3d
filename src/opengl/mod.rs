@@ -1,11 +1,14 @@
 //! Различная "обвязка" для OpenGL
 
+mod buffer;
 mod capability;
+pub mod configuration;
+pub mod errors;
 mod extensions;
 pub mod log;
 
+pub use buffer::Buffer;
 pub use capability::Capability;
-pub use extensions::{Extension, get_extensions};
 
 /// Загрузить адреса функций OpenGL от выбранного оконного backend'а.
 ///
