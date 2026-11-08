@@ -8,6 +8,7 @@ mod color;
 mod geometry;
 mod light;
 mod logger;
+mod mesh;
 mod opengl;
 mod ray_tracing;
 mod sdl_window;

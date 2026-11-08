@@ -1,11 +1,13 @@
 //! Различная "обвязка" для OpenGL
 
 mod buffer;
+pub mod buffer_object;
 mod capability;
 pub mod configuration;
 pub mod errors;
 mod extensions;
 pub mod log;
+mod typings;
 
 pub use buffer::Buffer;
 pub use capability::Capability;

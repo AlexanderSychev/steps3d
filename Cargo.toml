@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-glam = "0.34.2"
+glam = "0.34.3"
 num-complex = "0.4.6"
 simple-error = "0.3.3"
 palette = "0.7.7"
@@ -14,4 +14,5 @@ gl = "0.14.0"
 sdl2 = "0.38.0"
 log = "0.4.35"
 simplelog = "0.12.2"
+bytemuck = { version = "1.25.2", features = ["derive"] }
 strum = { version = "0.28.0", features = ["derive"] }
