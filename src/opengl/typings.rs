@@ -59,3 +59,34 @@ impl TryFrom<u32> for ValueType {
         }
     }
 }
+
+/// Трейт для скалярных типов OpenGL, которые можно использовать в качестве значений атрибутов вершин
+pub trait GlScalar {
+    /// Соответствующий скалярный тип OpenGL
+    const VALUE_TYPE: ValueType;
+}
+
+impl GlScalar for i8 {
+    const VALUE_TYPE: ValueType = ValueType::Byte;
+}
+impl GlScalar for u8 {
+    const VALUE_TYPE: ValueType = ValueType::UnsignedByte;
+}
+impl GlScalar for i16 {
+    const VALUE_TYPE: ValueType = ValueType::Short;
+}
+impl GlScalar for u16 {
+    const VALUE_TYPE: ValueType = ValueType::UnsignedShort;
+}
+impl GlScalar for i32 {
+    const VALUE_TYPE: ValueType = ValueType::Int;
+}
+impl GlScalar for u32 {
+    const VALUE_TYPE: ValueType = ValueType::UnsignedInt;
+}
+impl GlScalar for f32 {
+    const VALUE_TYPE: ValueType = ValueType::Float;
+}
+impl GlScalar for f64 {
+    const VALUE_TYPE: ValueType = ValueType::Double;
+}

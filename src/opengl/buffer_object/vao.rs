@@ -1,11 +1,13 @@
 use super::super::typings::ValueType;
-use std::num::NonZeroU32;
+use super::buffer_object_target::BufferObjectTarget;
+use super::vbo::{VertexBufferObject, VertexLayout};
+use bytemuck::Pod;
 use gl::{
-    BindVertexArray,
-    DeleteVertexArrays,
-    EnableVertexAttribArray, GenVertexArrays,
+    BindVertexArray, DeleteVertexArrays, EnableVertexAttribArray, GenVertexArrays,
     VertexAttribPointer,
 };
+use simple_error::{SimpleError, SimpleResult, simple_error};
+use std::num::NonZeroU32;
 
 /// Объект состояния вершинных буферов (VAO)
 #[derive(Debug, PartialEq)]
@@ -30,6 +32,40 @@ impl ArrayObject {
     /// Сделать этот VAO текущим
     pub fn bind(&self) {
         unsafe { BindVertexArray(self.opengl_id.get()) }
+    }
+
+    pub fn configure_layout<T: Pod>(
+        &self,
+        vbo: &VertexBufferObject<T>,
+        layout: &VertexLayout<T>,
+    ) -> SimpleResult<()> {
+        if vbo.get_target() != BufferObjectTarget::ArrayBuffer {
+            return Err(simple_error!(
+                "Invalid buffer target {:?}. Buffer must have target {:?}",
+                vbo.get_target(),
+                BufferObjectTarget::ArrayBuffer
+            ));
+        }
+
+        // Сделать буферы текущими
+        self.bind();
+        vbo.bind();
+
+        for attribute in &layout.attributes {
+            unsafe {
+                VertexAttribPointer(
+                    attribute.get_location(),
+                    i32::from(attribute.get_components()),
+                    attribute.get_value_type() as u32,
+                    attribute.normalized as u8,
+                    i32::try_from(layout.get_stride()).unwrap(),
+                    attribute.offset as *const std::ffi::c_void,
+                );
+                EnableVertexAttribArray(attribute.get_location());
+            }
+        }
+
+        Ok(())
     }
 
     pub fn vertex_attrib_pointer(
