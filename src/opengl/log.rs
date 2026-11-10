@@ -2,6 +2,7 @@
 
 use super::Capability;
 pub use super::extensions::{Extension, get_extensions};
+use strum::FromRepr;
 use gl;
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use std::{
@@ -12,7 +13,7 @@ use std::{
 };
 
 /// Тип сообщения логгера OpenGL
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum DebugLogMessageType {
     DebugTypeError = gl::DEBUG_TYPE_ERROR,
@@ -36,25 +37,10 @@ impl TryFrom<u32> for DebugLogMessageType {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            gl::DEBUG_TYPE_ERROR => Ok(DebugLogMessageType::DebugTypeError),
-            gl::DEBUG_TYPE_DEPRECATED_BEHAVIOR => {
-                Ok(DebugLogMessageType::DebugTypeDeprecatedBehavior)
-            }
-            gl::DEBUG_TYPE_UNDEFINED_BEHAVIOR => {
-                Ok(DebugLogMessageType::DebugTypeUndefinedBehavior)
-            }
-            gl::DEBUG_TYPE_PORTABILITY => Ok(DebugLogMessageType::DebugTypePortability),
-            gl::DEBUG_TYPE_PERFORMANCE => Ok(DebugLogMessageType::DebugTypePerformance),
-            gl::DEBUG_TYPE_MARKER => Ok(DebugLogMessageType::DebugTypeMarker),
-            gl::DEBUG_TYPE_PUSH_GROUP => Ok(DebugLogMessageType::DebugTypePushGroup),
-            gl::DEBUG_TYPE_POP_GROUP => Ok(DebugLogMessageType::DebugTypePopGroup),
-            gl::DEBUG_TYPE_OTHER => Ok(DebugLogMessageType::DebugTypeOther),
-            _ => Err(simple_error!(
-                "Cannot create \"DebugLogMessageType\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"DebugLogMessageType\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 

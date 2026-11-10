@@ -9,9 +9,10 @@ use gl::{
     TRANSFORM_FEEDBACK_BUFFER_BINDING, UNIFORM_BUFFER, UNIFORM_BUFFER_BINDING,
 };
 use simple_error::{SimpleError, SimpleResult, simple_error};
+use strum::FromRepr;
 
 /// Типы буферов
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum BufferObjectTarget {
     ArrayBuffer = ARRAY_BUFFER,
@@ -40,33 +41,17 @@ impl TryFrom<u32> for BufferObjectTarget {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            ARRAY_BUFFER => Ok(Self::ArrayBuffer),
-            ATOMIC_COUNTER_BUFFER => Ok(Self::AtomicCounterBuffer),
-            COPY_READ_BUFFER => Ok(Self::CopyReadBuffer),
-            COPY_WRITE_BUFFER => Ok(Self::CopyWriteBuffer),
-            DISPATCH_INDIRECT_BUFFER => Ok(Self::DispatchIndirectBuffer),
-            DRAW_INDIRECT_BUFFER => Ok(Self::DrawIndirectBuffer),
-            ELEMENT_ARRAY_BUFFER => Ok(Self::ElementArrayBuffer),
-            PIXEL_PACK_BUFFER => Ok(Self::PixelPackBuffer),
-            PIXEL_UNPACK_BUFFER => Ok(Self::PixelUnpackBuffer),
-            QUERY_BUFFER => Ok(Self::QueryBuffer),
-            SHADER_STORAGE_BUFFER => Ok(Self::ShaderStorageBuffer),
-            TEXTURE_BUFFER => Ok(Self::TextureBuffer),
-            TRANSFORM_FEEDBACK_BUFFER => Ok(Self::TransformFeedbackBuffer),
-            UNIFORM_BUFFER => Ok(Self::UniformBuffer),
-            _ => Err(simple_error!(
-                "Cannot create \"VertexBufferObjectType\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"BufferObjectTarget\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 
 /// Привязки буферов
 ///
 /// В основном нужны для получения текущего буфера
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum BufferObjectBinding {
     ArrayBufferBinding = ARRAY_BUFFER_BINDING,
@@ -95,26 +80,10 @@ impl TryFrom<u32> for BufferObjectBinding {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            ARRAY_BUFFER_BINDING => Ok(Self::ArrayBufferBinding),
-            ATOMIC_COUNTER_BUFFER_BINDING => Ok(Self::AtomicCounterBufferBinding),
-            COPY_READ_BUFFER_BINDING => Ok(Self::CopyReadBufferBinding),
-            COPY_WRITE_BUFFER_BINDING => Ok(Self::CopyWriteBufferBinding),
-            DISPATCH_INDIRECT_BUFFER_BINDING => Ok(Self::DispatchIndirectBufferBinding),
-            DRAW_INDIRECT_BUFFER_BINDING => Ok(Self::DrawIndirectBufferBinding),
-            ELEMENT_ARRAY_BUFFER_BINDING => Ok(Self::ElementArrayBufferBinding),
-            PIXEL_PACK_BUFFER_BINDING => Ok(Self::PixelPackBufferBinding),
-            PIXEL_UNPACK_BUFFER_BINDING => Ok(Self::PixelUnpackBufferBinding),
-            QUERY_BUFFER_BINDING => Ok(Self::QueryBufferBinding),
-            SHADER_STORAGE_BUFFER_BINDING => Ok(Self::ShaderStorageBufferBinding),
-            TEXTURE_BUFFER_BINDING => Ok(Self::TextureBufferBinding),
-            TRANSFORM_FEEDBACK_BUFFER_BINDING => Ok(Self::TransformFeedbackBufferBinding),
-            UNIFORM_BUFFER_BINDING => Ok(Self::UniformBufferBinding),
-            _ => Err(simple_error!(
-                "Cannot create \"VertexBufferObjectType\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"BufferObjectBinding\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 

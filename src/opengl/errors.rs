@@ -1,8 +1,9 @@
 //! Обработка ошибок OpenGL
 
 use simple_error::{SimpleError, SimpleResult, simple_error};
+use strum::FromRepr;
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum ErrorType {
     InvalidEnum = gl::INVALID_ENUM,
@@ -24,19 +25,10 @@ impl TryFrom<u32> for ErrorType {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            gl::INVALID_ENUM => Ok(ErrorType::InvalidEnum),
-            gl::INVALID_VALUE => Ok(ErrorType::InvalidValue),
-            gl::INVALID_OPERATION => Ok(ErrorType::InvalidOperation),
-            gl::INVALID_FRAMEBUFFER_OPERATION => Ok(ErrorType::InvalidFramebufferOperation),
-            gl::OUT_OF_MEMORY => Ok(ErrorType::OutOfMemory),
-            gl::STACK_UNDERFLOW => Ok(ErrorType::StackUnderflow),
-            gl::STACK_OVERFLOW => Ok(ErrorType::StackOverflow),
-            _ => Err(simple_error!(
-                "Cannot create \"ErrorType\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"ErrorType\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 

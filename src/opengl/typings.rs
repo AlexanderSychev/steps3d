@@ -4,9 +4,10 @@ use gl::{
     BYTE, DOUBLE, FIXED, FLOAT, HALF_FLOAT, INT, SHORT, UNSIGNED_BYTE, UNSIGNED_INT, UNSIGNED_SHORT,
 };
 use simple_error::{SimpleError, SimpleResult, simple_error};
+use strum::FromRepr;
 
 /// Типы значений OpenGL
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum ValueType {
     /// 8-битное целое со знаком
@@ -41,22 +42,10 @@ impl TryFrom<u32> for ValueType {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            BYTE => Ok(ValueType::Byte),
-            UNSIGNED_BYTE => Ok(ValueType::UnsignedByte),
-            SHORT => Ok(ValueType::Short),
-            UNSIGNED_SHORT => Ok(ValueType::UnsignedShort),
-            INT => Ok(ValueType::Int),
-            UNSIGNED_INT => Ok(ValueType::UnsignedInt),
-            FIXED => Ok(ValueType::Fixed),
-            HALF_FLOAT => Ok(ValueType::HalfFloat),
-            FLOAT => Ok(ValueType::Float),
-            DOUBLE => Ok(ValueType::Double),
-            _ => Err(simple_error!(
-                "Cannot create \"ValueType\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"ValueType\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 

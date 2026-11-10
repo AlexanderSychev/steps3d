@@ -2,9 +2,10 @@
 
 use gl;
 use simple_error::{SimpleError, SimpleResult, simple_error};
+use strum::FromRepr;
 
 /// Различные возможности OpenGL, которые можно включить или выключить
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum Capability {
     Blend = gl::BLEND,
@@ -56,47 +57,10 @@ impl TryFrom<u32> for Capability {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            gl::BLEND => Ok(Capability::Blend),
-            gl::CLIP_DISTANCE0 => Ok(Capability::ClipDistance0),
-            gl::CLIP_DISTANCE1 => Ok(Capability::ClipDistance1),
-            gl::CLIP_DISTANCE2 => Ok(Capability::ClipDistance2),
-            gl::CLIP_DISTANCE3 => Ok(Capability::ClipDistance3),
-            gl::CLIP_DISTANCE4 => Ok(Capability::ClipDistance4),
-            gl::CLIP_DISTANCE5 => Ok(Capability::ClipDistance5),
-            gl::CLIP_DISTANCE6 => Ok(Capability::ClipDistance6),
-            gl::CLIP_DISTANCE7 => Ok(Capability::ClipDistance7),
-            gl::COLOR_LOGIC_OP => Ok(Capability::ColorLogicOp),
-            gl::CULL_FACE => Ok(Capability::CullFace),
-            gl::DEBUG_OUTPUT => Ok(Capability::DebugOutput),
-            gl::DEBUG_OUTPUT_SYNCHRONOUS => Ok(Capability::DebugOutputSynchronous),
-            gl::DEPTH_CLAMP => Ok(Capability::DepthClamp),
-            gl::DEPTH_TEST => Ok(Capability::DepthTest),
-            gl::DITHER => Ok(Capability::Dither),
-            gl::FRAMEBUFFER_SRGB => Ok(Capability::FramebufferSrgb),
-            gl::LINE_SMOOTH => Ok(Capability::LineSmooth),
-            gl::MULTISAMPLE => Ok(Capability::Multisample),
-            gl::POLYGON_OFFSET_FILL => Ok(Capability::PolygonOffsetFill),
-            gl::POLYGON_OFFSET_LINE => Ok(Capability::PolygonOffsetLine),
-            gl::POLYGON_OFFSET_POINT => Ok(Capability::PolygonOffsetPoint),
-            gl::POLYGON_SMOOTH => Ok(Capability::PolygonSmooth),
-            gl::PRIMITIVE_RESTART => Ok(Capability::PrimitiveRestart),
-            gl::PRIMITIVE_RESTART_FIXED_INDEX => Ok(Capability::PrimitiveRestartFixedIndex),
-            gl::RASTERIZER_DISCARD => Ok(Capability::RasterizerDiscard),
-            gl::SAMPLE_ALPHA_TO_COVERAGE => Ok(Capability::SampleAlphaToCoverage),
-            gl::SAMPLE_ALPHA_TO_ONE => Ok(Capability::SampleAlphaToOne),
-            gl::SAMPLE_COVERAGE => Ok(Capability::SampleCoverage),
-            gl::SAMPLE_SHADING => Ok(Capability::SampleShading),
-            gl::SAMPLE_MASK => Ok(Capability::SampleMask),
-            gl::SCISSOR_TEST => Ok(Capability::ScissorTest),
-            gl::STENCIL_TEST => Ok(Capability::StencilTest),
-            gl::TEXTURE_CUBE_MAP_SEAMLESS => Ok(Capability::TextureCubeMapSeamless),
-            gl::PROGRAM_POINT_SIZE => Ok(Capability::ProgramPointSize),
-            _ => Err(simple_error!(
-                "Cannot create \"Capability\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"Capability\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 

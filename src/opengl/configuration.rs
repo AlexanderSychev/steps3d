@@ -4,6 +4,7 @@
 
 use gl::{BACK, CCW, CW, CullFace, FRONT, FRONT_AND_BACK, FrontFace, Viewport};
 use simple_error::{SimpleError, SimpleResult, simple_error};
+use strum::FromRepr;
 
 /// Задать размеры области просмотра OpenGL.
 pub fn set_viewport_size(width: u32, height: u32) -> SimpleResult<()> {
@@ -29,7 +30,7 @@ pub fn set_viewport_size(width: u32, height: u32) -> SimpleResult<()> {
 }
 
 /// Направление лицевых граней
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum FrontFaceDirection {
     /// По часовой стрелке
@@ -48,14 +49,10 @@ impl TryFrom<u32> for FrontFaceDirection {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            CW => Ok(Self::Clockwise),
-            CCW => Ok(Self::CounterClockwise),
-            _ => Err(simple_error!(
-                "Cannot create \"FrontFace\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"FrontFace\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 

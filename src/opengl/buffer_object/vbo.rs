@@ -11,6 +11,7 @@ use simple_error::{SimpleError, SimpleResult, simple_error};
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::num::NonZeroU32;
+use strum::FromRepr;
 
 /// Получить максимально допустимое число атрибутов вершины в текущем контексте OpenGL.
 pub fn get_max_vertex_attribs() -> u32 {
@@ -247,7 +248,7 @@ impl<T: Pod> Drop for VertexBufferObject<T> {
 }
 
 /// Интересная штука, разберем позже
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum BufferMapperFlag {
     Read = MAP_READ_BIT,
@@ -264,14 +265,10 @@ impl TryFrom<u32> for BufferMapperFlag {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            MAP_READ_BIT => Ok(Self::Read),
-            MAP_WRITE_BIT => Ok(Self::Write),
-            _ => Err(simple_error!(
-                "Cannot create \"VertexBufferObjectType\" value from \"u32\" value: {}",
-                value
-            )),
-        }
+        Self::from_repr(value).ok_or_else(|| simple_error!(
+            "Cannot create \"BufferMapperFlag\" value from \"u32\" value: {}",
+            value
+        ))
     }
 }
 
