@@ -2,10 +2,10 @@
 
 use gl;
 use simple_error::{SimpleError, SimpleResult, simple_error};
-use strum::FromRepr;
+use strum::{EnumCount, EnumIter, FromRepr, IntoEnumIterator};
 
 /// Различные возможности OpenGL, которые можно включить или выключить
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr, EnumCount, EnumIter)]
 #[repr(u32)]
 pub enum Capability {
     Blend = gl::BLEND,
@@ -80,5 +80,36 @@ impl Capability {
     /// Отключить возможность OpenGL
     pub fn disable(self) {
         unsafe { gl::Disable(self as u32) }
+    }
+
+    /// Получить индекс элемента перечисления
+    #[inline]
+    fn get_value_index(self) -> usize {
+        Capability::iter()
+            .position(|cap| cap == self)
+            .expect("Capability must be part of its own iterator")
+    }
+}
+
+pub struct CapabilityManager {
+    /// Флаги включенных возможностей OpenGL
+    flags: [bool; Capability::COUNT],
+}
+
+impl CapabilityManager {
+    pub fn new() -> Self {
+        // Инициализируем массив значениями по умолчанию
+        let mut flags = [false; Capability::COUNT];
+
+        // Задаем дефолты согласно спецификации OpenGL
+        for cap in Capability::iter() {
+            let index = cap.get_value_index();
+            flags[index] = match cap {
+                Capability::Multisample | Capability::Dither => true,
+                _ => false,
+            };
+        }
+
+        Self { flags }
     }
 }
