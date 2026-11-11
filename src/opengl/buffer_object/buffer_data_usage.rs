@@ -45,6 +45,7 @@ impl BufferDataUsage {
         }
     }
 
+    /// Вывести константу OpenGL из правил использования буфера данных
     pub const fn to_gl(self) -> u32 {
         match (self.strategy, self.usage_type) {
             (BufferDataUsageStrategy::Stream, BufferDataUsageType::Draw) => STREAM_DRAW,
