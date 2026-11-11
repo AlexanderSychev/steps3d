@@ -263,13 +263,14 @@ impl<T: Pod> VertexBufferObject<T> {
     /// Заменить содержимое буфера байтовым представлением среза `Pod`-значений.
     ///
     /// Функция возвращает ошибку, если размер данных не помещается в `GLsizeiptr`.
-    pub fn fill_buffer(&self, data: &[T], usage: BufferDataUsage) -> SimpleResult<()> {
+    pub fn fill_buffer(&self, data: &[T], maybe_usage: Option<BufferDataUsage>) -> SimpleResult<()> {
+        let usage = maybe_usage.unwrap_or_default();
         let byte_len = data
             .len()
             .checked_mul(self.element_size)
             .ok_or_else(|| simple_error!("Buffer data size overflow"))?;
         let size = isize::try_from(byte_len)
-            .map_err(|_| simple_error!("Buffer data is too large for GLsizeiptr"))?;
+            .map_err(|_| simple_error!("Buffer data is too large for \"GLsizeiptr\""))?;
         let bytes: &[u8] = bytemuck::cast_slice(data);
         let data_ptr = if bytes.is_empty() {
             std::ptr::null()

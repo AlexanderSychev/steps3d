@@ -4,20 +4,22 @@ use gl::{
 };
 
 /// Стратегия использования буфера данных
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Default)]
 pub enum BufferDataUsageStrategy {
     /// Данные задаются один раз и будут использованы **немного** раз
     Stream,
     /// Данные задаются один раз и будут использованы **много** раз
+    #[default]
     Static,
     /// Данные задаются часто и будут использованы **много** раз
     Dynamic,
 }
 
 /// Назначение буфера данных
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Default)]
 pub enum BufferDataUsageType {
     /// Данные будут использоваться рендерингом
+    #[default]
     Draw,
     /// Данные будут читаться приложением
     Read,
@@ -26,7 +28,7 @@ pub enum BufferDataUsageType {
 }
 
 /// Правила использования буфера данных
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Default)]
 pub struct BufferDataUsage {
     // Стратегия использования буфера данных
     pub strategy: BufferDataUsageStrategy,
@@ -42,10 +44,8 @@ impl BufferDataUsage {
             usage_type,
         }
     }
-}
 
-impl Into<u32> for BufferDataUsage {
-    fn into(self) -> u32 {
+    pub const fn to_gl(self) -> u32 {
         match (self.strategy, self.usage_type) {
             (BufferDataUsageStrategy::Stream, BufferDataUsageType::Draw) => STREAM_DRAW,
             (BufferDataUsageStrategy::Stream, BufferDataUsageType::Read) => STREAM_READ,
@@ -57,5 +57,11 @@ impl Into<u32> for BufferDataUsage {
             (BufferDataUsageStrategy::Dynamic, BufferDataUsageType::Read) => DYNAMIC_READ,
             (BufferDataUsageStrategy::Dynamic, BufferDataUsageType::Copy) => DYNAMIC_COPY,
         }
+    }
+}
+
+impl From<BufferDataUsage> for u32 {
+    fn from(value: BufferDataUsage) -> Self {
+        value.to_gl()
     }
 }
