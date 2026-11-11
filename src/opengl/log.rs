@@ -1,8 +1,7 @@
 //! Подсистема логгирования для OpenGL
 
-use super::Capability;
+use super::capability::{Capability, CapabilityManager};
 pub use super::extensions::{Extension, get_extensions};
-use strum::FromRepr;
 use gl;
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use std::{
@@ -11,6 +10,7 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
+use strum::FromRepr;
 
 /// Тип сообщения логгера OpenGL
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
@@ -37,15 +37,17 @@ impl TryFrom<u32> for DebugLogMessageType {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| simple_error!(
-            "Cannot create \"DebugLogMessageType\" value from \"u32\" value: {}",
-            value
-        ))
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"DebugLogMessageType\" value from \"u32\" value: {}",
+                value
+            )
+        })
     }
 }
 
 /// Источник сообщения логгера OpenGL
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum DebugLogSource {
     DebugSourceApi = gl::DEBUG_SOURCE_API,
@@ -66,23 +68,17 @@ impl TryFrom<u32> for DebugLogSource {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            gl::DEBUG_SOURCE_API => Ok(DebugLogSource::DebugSourceApi),
-            gl::DEBUG_SOURCE_WINDOW_SYSTEM => Ok(DebugLogSource::DebugSourceWindowSystem),
-            gl::DEBUG_SOURCE_SHADER_COMPILER => Ok(DebugLogSource::DebugSourceShaderCompiler),
-            gl::DEBUG_SOURCE_THIRD_PARTY => Ok(DebugLogSource::DebugSourceThirdParty),
-            gl::DEBUG_SOURCE_APPLICATION => Ok(DebugLogSource::DebugSourceApplication),
-            gl::DEBUG_SOURCE_OTHER => Ok(DebugLogSource::DebugSourceOther),
-            _ => Err(SimpleError::new(format!(
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
                 "Cannot create \"DebugLogSource\" value from \"u32\" value: {}",
                 value
-            ))),
-        }
+            )
+        })
     }
 }
 
 /// Уровень сообщения логгера OpenGL
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum DebugLogSeverity {
     DebugSeverityHigh = gl::DEBUG_SEVERITY_HIGH,
@@ -101,16 +97,12 @@ impl TryFrom<u32> for DebugLogSeverity {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        match value {
-            gl::DEBUG_SEVERITY_HIGH => Ok(DebugLogSeverity::DebugSeverityHigh),
-            gl::DEBUG_SEVERITY_MEDIUM => Ok(DebugLogSeverity::DebugSeverityMedium),
-            gl::DEBUG_SEVERITY_LOW => Ok(DebugLogSeverity::DebugSeverityLow),
-            gl::DEBUG_SEVERITY_NOTIFICATION => Ok(DebugLogSeverity::DebugSeverityNotification),
-            _ => Err(SimpleError::new(format!(
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
                 "Cannot create \"DebugLogSeverity\" value from \"u32\" value: {}",
                 value
-            ))),
-        }
+            )
+        })
     }
 }
 
@@ -127,6 +119,7 @@ type LogCallback = dyn Fn(DebugLogSource, DebugLogMessageType, u32, DebugLogSeve
 /// другой `DebugMessageCallback` в этом контексте.
 pub struct DebugLogger {
     _callback_data: Box<Arc<LogCallback>>,
+    capability_manager: CapabilityManager,
     previous_debug_output: bool,
     previous_synchronous_output: bool,
     // OpenGL-контекст привязан к потоку; guard не должен перемещаться между потоками.
@@ -189,14 +182,16 @@ impl Drop for DebugLogger {
         }
 
         if self.previous_debug_output {
-            Capability::DebugOutput.enable();
+            self.capability_manager.enable(Capability::DebugOutput);
         } else {
-            Capability::DebugOutput.disable();
+            self.capability_manager.disable(Capability::DebugOutput);
         }
         if self.previous_synchronous_output {
-            Capability::DebugOutputSynchronous.enable();
+            self.capability_manager
+                .enable(Capability::DebugOutputSynchronous);
         } else {
-            Capability::DebugOutputSynchronous.disable();
+            self.capability_manager
+                .disable(Capability::DebugOutputSynchronous);
         }
     }
 }
@@ -217,12 +212,16 @@ where
         return Err(simple_error!("OpenGL debug output is not supported"));
     }
 
-    let previous_debug_output = Capability::DebugOutput.is_enabled();
-    let previous_synchronous_output = Capability::DebugOutputSynchronous.is_enabled();
+    // Нужна актуальная информация по флагам, берем с GPU: большой оверхед, но логгер инициируется обычно один раз
+    let mut capability_manager = CapabilityManager::new(true);
+
+    let previous_debug_output = capability_manager.is_capability_enabled(Capability::DebugOutput);
+    let previous_synchronous_output =
+        capability_manager.is_capability_enabled(Capability::DebugOutputSynchronous);
 
     // A synchronous callback runs on the thread issuing the GL command, which
     // makes the user-data lifetime manageable by this guard.
-    Capability::DebugOutputSynchronous.enable();
+    capability_manager.enable(Capability::DebugOutputSynchronous);
 
     let callback_data: Box<Arc<LogCallback>> = Box::new(Arc::new(callback));
     let user_param = callback_data.as_ref() as *const Arc<LogCallback> as *mut std::ffi::c_void;
@@ -230,11 +229,12 @@ where
     unsafe {
         gl::DebugMessageCallback(Some(opengl_debug_log), user_param);
     }
-    Capability::DebugOutput.enable();
+    capability_manager.enable(Capability::DebugOutput);
 
     Ok(DebugLogger {
         _callback_data: callback_data,
         previous_debug_output,
+        capability_manager,
         previous_synchronous_output,
         _thread_affinity: PhantomData,
     })

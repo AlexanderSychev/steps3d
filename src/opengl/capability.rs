@@ -1,10 +1,10 @@
-//! Проверка и подключение возможностей OpenGL (capabilities)
+//! Базовые состояния OpenGL ("Capabilities")
 
-use gl;
+use gl::{Disable, Enable};
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use strum::{EnumCount, EnumIter, FromRepr, IntoEnumIterator};
 
-/// Различные возможности OpenGL, которые можно включить или выключить
+/// Различные флаги состояний OpenGL, которые можно включить или выключить
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr, EnumCount, EnumIter)]
 #[repr(u32)]
 pub enum Capability {
@@ -22,6 +22,7 @@ pub enum Capability {
     CullFace = gl::CULL_FACE,
     /// Отладочные логи
     DebugOutput = gl::DEBUG_OUTPUT,
+    /// Отладочные логи (синхронный вывод)
     DebugOutputSynchronous = gl::DEBUG_OUTPUT_SYNCHRONOUS,
     DepthClamp = gl::DEPTH_CLAMP,
     DepthTest = gl::DEPTH_TEST,
@@ -57,32 +58,17 @@ impl TryFrom<u32> for Capability {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| simple_error!(
-            "Cannot create \"Capability\" value from \"u32\" value: {}",
-            value
-        ))
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"Capability\" value from \"u32\" value: {}",
+                value
+            )
+        })
     }
 }
 
 impl Capability {
-    /// Проверить, включина ли возможность OpenGL
-    pub fn is_enabled(self) -> bool {
-        unsafe { gl::IsEnabled(self as u32) != 0 }
-    }
-
-    /// Включить возможность OpenGL
-    pub fn enable(self) {
-        unsafe {
-            gl::Enable(self as u32);
-        }
-    }
-
-    /// Отключить возможность OpenGL
-    pub fn disable(self) {
-        unsafe { gl::Disable(self as u32) }
-    }
-
-    /// Получить индекс элемента перечисления
+    /// Получить индекс элемента перечисления (только для внутренних нужд)
     #[inline]
     fn get_value_index(self) -> usize {
         Capability::iter()
@@ -91,25 +77,66 @@ impl Capability {
     }
 }
 
+/// Менеджер для управления флагами состояний OpenGL с кэшированием
 pub struct CapabilityManager {
     /// Флаги включенных возможностей OpenGL
     flags: [bool; Capability::COUNT],
 }
 
 impl CapabilityManager {
-    pub fn new() -> Self {
+    pub fn new(hardware: bool) -> Self {
         // Инициализируем массив значениями по умолчанию
         let mut flags = [false; Capability::COUNT];
 
-        // Задаем дефолты согласно спецификации OpenGL
         for cap in Capability::iter() {
             let index = cap.get_value_index();
-            flags[index] = match cap {
-                Capability::Multisample | Capability::Dither => true,
-                _ => false,
+
+            flags[index] = if hardware {
+                // Если флаг "hardware" включен, то заполняем по данным из GPU.
+                // Это довольно "тяжелая" операция.
+                unsafe { gl::IsEnabled(cap as u32) != 0 }
+            } else {
+                // Если флаг "hardware" выключен, то заполняем согласно спецификации OpenGL.
+                match cap {
+                    Capability::Multisample | Capability::Dither => true,
+                    _ => false,
+                }
             };
         }
 
         Self { flags }
+    }
+
+    /// Проверяем флаг состояния
+    pub fn is_capability_enabled(&self, cap: Capability) -> bool {
+        self.flags[cap.get_value_index()]
+    }
+
+    /// Включить флаг состояния
+    pub fn enable(&mut self, cap: Capability) {
+        self.set_capability(cap, true);
+    }
+
+    /// Выключить флаг состояния
+    pub fn disable(&mut self, cap: Capability) {
+        self.set_capability(cap, false);
+    }
+
+    /// Безопасно переключает флаг состояни ТОЛЬКО если он реально изменился
+    pub fn set_capability(&mut self, cap: Capability, enable: bool) {
+        let index = cap.get_value_index();
+
+        // Проверяем кэш на CPU. Если состояние уже совпадает — игнорируем вызов!
+        if self.flags[index] == enable {
+            return;
+        }
+
+        // Если не совпадает — обновляем кэш и отправляем ОДНУ команду "на запись" в GPU
+        self.flags[index] = enable;
+        if enable {
+            unsafe { Enable(cap as u32) }
+        } else {
+            unsafe { Disable(cap as u32) }
+        }
     }
 }

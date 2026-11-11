@@ -6,11 +6,12 @@ mod capability;
 pub mod configuration;
 pub mod errors;
 mod extensions;
+mod limits;
 pub mod log;
 mod typings;
 
 pub use buffer::Buffer;
-pub use capability::Capability;
+pub use capability::{Capability, CapabilityManager};
 
 /// Загрузить адреса функций OpenGL от выбранного оконного backend'а.
 ///

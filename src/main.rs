@@ -2,6 +2,8 @@ use glam::{Mat2, Vec2, Vec2Swizzles};
 use num_complex::{Complex32, ComplexFloat};
 use simple_error::SimpleResult;
 
+use crate::opengl::CapabilityManager;
+
 mod app;
 mod canvas;
 mod color;
@@ -1000,8 +1002,12 @@ fn main() -> SimpleResult<()> {
     const WIDTH: u32 = 1024;
     const HEIGHT: u32 = 768;
 
+    // Начальная инициализация
     let window = sdl_window::SdlGlWindow::try_new("Steps 3D - OpenGL", WIDTH, HEIGHT)?;
     opengl::load_with(|name| window.gl_get_proc_address(name));
+
+    // "Опрос" устройства
+    let mut capabilities = CapabilityManager::new(false);
 
     let _debug_logger = if opengl::log::supports_debug_output() {
         Some(opengl::log::attach_log(
@@ -1025,7 +1031,7 @@ fn main() -> SimpleResult<()> {
     };
 
     // Отдельно включить отсечение и задать параметры лицевых граней.
-    opengl::Capability::CullFace.enable();
+    capabilities.enable(opengl::Capability::CullFace);
     opengl::configuration::FrontFaceDirection::Clockwise.set();
     opengl::configuration::CullFaceMode::Back.set();
 

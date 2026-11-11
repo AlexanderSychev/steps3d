@@ -41,10 +41,12 @@ impl TryFrom<u32> for BufferObjectTarget {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| simple_error!(
-            "Cannot create \"BufferObjectTarget\" value from \"u32\" value: {}",
-            value
-        ))
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"BufferObjectTarget\" value from \"u32\" value: {}",
+                value
+            )
+        })
     }
 }
 
@@ -80,10 +82,12 @@ impl TryFrom<u32> for BufferObjectBinding {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| simple_error!(
-            "Cannot create \"BufferObjectBinding\" value from \"u32\" value: {}",
-            value
-        ))
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"BufferObjectBinding\" value from \"u32\" value: {}",
+                value
+            )
+        })
     }
 }
 

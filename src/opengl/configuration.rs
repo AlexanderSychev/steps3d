@@ -49,10 +49,12 @@ impl TryFrom<u32> for FrontFaceDirection {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| simple_error!(
-            "Cannot create \"FrontFace\" value from \"u32\" value: {}",
-            value
-        ))
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"FrontFace\" value from \"u32\" value: {}",
+                value
+            )
+        })
     }
 }
 

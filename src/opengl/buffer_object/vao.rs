@@ -1,13 +1,71 @@
+use super::super::limits::Limits;
 use super::super::typings::ValueType;
 use super::buffer_object_target::BufferObjectTarget;
-use super::vbo::{VertexBufferObject, VertexLayout};
+use super::vbo::{VertexAttribute, VertexBufferObject, VertexLayout};
 use bytemuck::Pod;
 use gl::{
     BindVertexArray, DeleteVertexArrays, EnableVertexAttribArray, GenVertexArrays,
-    VertexAttribPointer,
+    VertexAttribIPointer, VertexAttribLPointer, VertexAttribPointer,
+    DrawArrays,
+    POINTS,
+    LINE_STRIP,
+    LINE_LOOP,
+    LINES,
+    LINE_STRIP_ADJACENCY,
+    LINES_ADJACENCY,
+    TRIANGLE_STRIP,
+    TRIANGLE_FAN,
+    TRIANGLES,
+    TRIANGLE_STRIP_ADJACENCY,
+    TRIANGLES_ADJACENCY,
+    PATCHES,
 };
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use std::num::NonZeroU32;
+use strum::FromRepr;
+
+/// Режимы отрисовки
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
+#[repr(u32)]
+pub enum ArrayDrawMode {
+    /// Точки
+    Points = POINTS,
+    /// Отрезки
+    LineStrip = LINE_STRIP,
+    /// Многоугольники из отрезков
+    LineLoop = LINE_LOOP,
+    /// Ломаные
+    Lines = LINES,
+    LineStripAdjacency = LINE_STRIP_ADJACENCY,
+    LinesAdjacency = LINES_ADJACENCY,
+    TriangleStrip = TRIANGLE_STRIP,
+    /// Полигоны трегуольников
+    TriangleFan = TRIANGLE_FAN,
+    /// Треугольники
+    Triangles = TRIANGLES,
+    TriangleStripAdjacency = TRIANGLE_STRIP_ADJACENCY,
+    TrianglesAdjacency = TRIANGLES_ADJACENCY,
+    Patches = PATCHES,
+}
+
+impl PartialEq<u32> for ArrayDrawMode {
+    fn eq(&self, other: &u32) -> bool {
+        *self as u32 == *other
+    }
+}
+
+impl TryFrom<u32> for ArrayDrawMode {
+    type Error = SimpleError;
+
+    fn try_from(value: u32) -> SimpleResult<Self> {
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"ArrayDrawMode\" value from \"u32\" value: {}",
+                value
+            )
+        })
+    }
+}
 
 /// Объект состояния вершинных буферов (VAO)
 #[derive(Debug, PartialEq)]
@@ -38,6 +96,7 @@ impl ArrayObject {
         &self,
         vbo: &VertexBufferObject<T>,
         layout: &VertexLayout<T>,
+        limits: &Limits,
     ) -> SimpleResult<()> {
         if vbo.get_target() != BufferObjectTarget::ArrayBuffer {
             return Err(simple_error!(
@@ -47,20 +106,43 @@ impl ArrayObject {
             ));
         }
 
+        // Преобразование типа "stride" с проверкой
+        let stride = i32::try_from(layout.get_stride())
+            .map_err(|_| simple_error!("Stride is too large for \"GLsizei\""))?;
+
+        // Валидация атрибутов
+        for attribute in layout.get_attributes() {
+            if attribute.get_location() >= limits.get_max_vertex_attribs() {
+                return Err(simple_error!(
+                    "Location is too large: {:?}. Max allowed value is {:?}",
+                    &attribute.get_location(),
+                    &limits.get_max_vertex_attribs()
+                ));
+            }
+        }
+
+        // !! Вся работа с OpenGL - строго после проверок !!
+
         // Сделать буферы текущими
         self.bind();
         vbo.bind();
 
-        for attribute in &layout.attributes {
+        // Описать атрибуты для OpenGL
+        for attribute in layout.get_attributes() {
+            match attribute.get_value_type() {
+                ValueType::Byte
+                | ValueType::UnsignedByte
+                | ValueType::Short
+                | ValueType::UnsignedShort
+                | ValueType::Int
+                | ValueType::UnsignedInt => {
+                    self.vertex_attribute_integer_pointer(stride, attribute)
+                }
+                ValueType::Double => self.vertex_attribute_long_pointer(stride, attribute),
+                _ => self.vertex_attribute_pointer(stride, attribute),
+            }
+
             unsafe {
-                VertexAttribPointer(
-                    attribute.get_location(),
-                    i32::from(attribute.get_components()),
-                    attribute.get_value_type() as u32,
-                    attribute.normalized as u8,
-                    i32::try_from(layout.get_stride()).unwrap(),
-                    attribute.offset as *const std::ffi::c_void,
-                );
                 EnableVertexAttribArray(attribute.get_location());
             }
         }
@@ -68,32 +150,56 @@ impl ArrayObject {
         Ok(())
     }
 
-    pub fn vertex_attrib_pointer(
-        &self,
-        location: u32,
-        size: usize,
-        value_type: ValueType,
-        normalized: bool,
-        stride: usize,
-        offset: usize,
-    ) {
-        // self.bind();
+    /// "Нарисовать" примитивы по VAO
+    pub fn draw_arrays(&self, mode: ArrayDrawMode, first: u32, count: u32) -> SimpleResult<()> {
+        let first = i32::try_from(first)
+            .map_err(|_| simple_error!("First vertex is too large for GLint"))?;
+        let count = i32::try_from(count)
+            .map_err(|_| simple_error!("Vertex count is too large for GLsizei"))?;
 
+        self.bind();
         unsafe {
-            VertexAttribPointer(
-                location,
-                size as i32,
-                value_type as u32,
-                normalized as u8,
-                stride as i32,
-                offset as *const std::ffi::c_void,
+            DrawArrays(mode as u32, first, count);
+        }
+
+        Ok(())
+    }
+
+    fn vertex_attribute_integer_pointer(&self, stride: i32, attribute: &VertexAttribute) {
+        unsafe {
+            VertexAttribIPointer(
+                attribute.get_location(),
+                i32::from(attribute.get_components()),
+                attribute.get_value_type() as u32,
+                stride,
+                attribute.get_offset() as *const std::ffi::c_void,
             );
         }
     }
 
-    pub fn enable_vertex_attrib_array(&self, location: u32) {
-        self.bind();
-        unsafe { EnableVertexAttribArray(location) };
+    fn vertex_attribute_long_pointer(&self, stride: i32, attribute: &VertexAttribute) {
+        unsafe {
+            VertexAttribLPointer(
+                attribute.get_location(),
+                i32::from(attribute.get_components()),
+                attribute.get_value_type() as u32,
+                stride,
+                attribute.get_offset() as *const std::ffi::c_void,
+            );
+        }
+    }
+
+    fn vertex_attribute_pointer(&self, stride: i32, attribute: &VertexAttribute) {
+        unsafe {
+            VertexAttribPointer(
+                attribute.get_location(),
+                i32::from(attribute.get_components()),
+                attribute.get_value_type() as u32,
+                attribute.get_normalized() as u8,
+                stride,
+                attribute.get_offset() as *const std::ffi::c_void,
+            );
+        }
     }
 }
 

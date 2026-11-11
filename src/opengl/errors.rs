@@ -25,10 +25,12 @@ impl TryFrom<u32> for ErrorType {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| simple_error!(
-            "Cannot create \"ErrorType\" value from \"u32\" value: {}",
-            value
-        ))
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"ErrorType\" value from \"u32\" value: {}",
+                value
+            )
+        })
     }
 }
 

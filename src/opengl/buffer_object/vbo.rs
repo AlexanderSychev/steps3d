@@ -1,48 +1,40 @@
+use super::super::limits::Limits;
 use super::super::typings::{GlScalar, ValueType};
 use super::buffer_data_usage::BufferDataUsage;
 use super::buffer_object_target::{BufferObjectBinding, BufferObjectTarget};
 use bytemuck::Pod;
 use gl::{
-    BindBuffer, DeleteBuffers, GenBuffers, GetIntegerv, MAP_READ_BIT, MAP_WRITE_BIT,
-    MAX_VERTEX_ATTRIBS, UnmapBuffer,
+    BindBuffer, DeleteBuffers, GenBuffers, GetIntegerv, MAP_READ_BIT, MAP_WRITE_BIT, UnmapBuffer,
 };
 use glam::Vec3;
 use simple_error::{SimpleError, SimpleResult, simple_error};
+use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::mem::size_of;
 use std::num::NonZeroU32;
 use strum::FromRepr;
-
-/// Получить максимально допустимое число атрибутов вершины в текущем контексте OpenGL.
-pub fn get_max_vertex_attribs() -> u32 {
-    let mut max_attribs = 0;
-    unsafe {
-        GetIntegerv(MAX_VERTEX_ATTRIBS, &mut max_attribs);
-    }
-    max_attribs as u32
-}
 
 /// Интерфейс для вывода описания атрибута в OpenGL
 pub trait AttributeFormat {
     /// Тип значения в OpenGL
     const VALUE_TYPE: ValueType;
     /// Количество компонентов
-    const COMPONENTS: u8;
+    const COMPONENTS: usize;
 }
 
 impl<S: GlScalar> AttributeFormat for S {
     const VALUE_TYPE: ValueType = S::VALUE_TYPE;
-    const COMPONENTS: u8 = 1;
+    const COMPONENTS: usize = 1;
 }
 
 impl<S: GlScalar, const N: usize> AttributeFormat for [S; N] {
     const VALUE_TYPE: ValueType = S::VALUE_TYPE;
-    const COMPONENTS: u8 = N as u8;
+    const COMPONENTS: usize = N;
 }
 
 impl AttributeFormat for Vec3 {
     const VALUE_TYPE: ValueType = ValueType::Float;
-    const COMPONENTS: u8 = 3;
+    const COMPONENTS: usize = 3;
 }
 
 /// Атрибут вершины
@@ -55,9 +47,9 @@ pub struct VertexAttribute {
     /// Тип значения
     value_type: ValueType,
     /// Нормализованы ли значения
-    pub normalized: bool,
+    normalized: bool,
     /// Смещение в байтах (сколько байт надо "пропустить", чтобы "попасть" в начало атрибута)
-    pub offset: usize,
+    offset: usize,
 }
 
 impl VertexAttribute {
@@ -66,18 +58,18 @@ impl VertexAttribute {
         location: u32,
         offset: usize,
         normalized: bool,
+        limits: &Limits,
     ) -> SimpleResult<VertexAttribute> {
         let components = T::COMPONENTS;
         if !(1..=4).contains(&components) {
             return Err(simple_error!("Components count must be value from 1 to 4"));
         }
 
-        let max_vertex_attribs = get_max_vertex_attribs();
-        if location >= max_vertex_attribs {
+        if location >= limits.get_max_vertex_attribs() {
             return Err(simple_error!(
                 "Location is too large: {:?}. Max allowed value is {:?}",
                 &location,
-                &max_vertex_attribs
+                &limits.get_max_vertex_attribs()
             ));
         }
 
@@ -85,7 +77,7 @@ impl VertexAttribute {
             location,
             offset,
             normalized,
-            components,
+            components: components as u8,
             value_type: T::VALUE_TYPE,
         })
     }
@@ -104,6 +96,28 @@ impl VertexAttribute {
     pub fn get_value_type(&self) -> ValueType {
         self.value_type
     }
+
+    /// Получить размер данных атрибута в байтах.
+    fn get_size_in_bytes(&self) -> Option<usize> {
+        let component_size = match self.value_type {
+            ValueType::Byte | ValueType::UnsignedByte => 1,
+            ValueType::Short | ValueType::UnsignedShort | ValueType::HalfFloat => 2,
+            ValueType::Int | ValueType::UnsignedInt | ValueType::Fixed | ValueType::Float => 4,
+            ValueType::Double => 8,
+        };
+
+        usize::from(self.components).checked_mul(component_size)
+    }
+
+    /// Получить флаг нормализованности данных
+    pub fn get_normalized(&self) -> bool {
+        self.normalized
+    }
+
+    /// Получить смещение в байтах
+    pub fn get_offset(&self) -> usize {
+        self.offset
+    }
 }
 
 /// Описание атрибутов вершин для VAO
@@ -112,7 +126,7 @@ pub struct VertexLayout<T: Pod> {
     /// Размер одного элемента в байтах
     stride: usize,
     /// Атрибуты вершин
-    pub attributes: Vec<VertexAttribute>,
+    attributes: Vec<VertexAttribute>,
     /// "Метка" для компилятора
     _marker: PhantomData<T>,
 }
@@ -121,7 +135,35 @@ impl<T: Pod> VertexLayout<T> {
     /// Создать новое описание атрибута вершин
     pub fn new(attributes: &[VertexAttribute]) -> SimpleResult<VertexLayout<T>> {
         let stride = size_of::<T>();
-        i32::try_from(stride).map_err(|_| simple_error!("Stride is too large for GLsizeiptr"))?;
+        i32::try_from(stride).map_err(|_| simple_error!("Stride is too large for \"GLsizei\""))?;
+
+        // Валидация атрибутов: каждый атрибут должен целиком помещаться в вершину.
+        let mut locations = BTreeSet::<u32>::new();
+        for attribute in attributes {
+            if !locations.insert(attribute.location) {
+                return Err(simple_error!(
+                    "Duplicated location value: {}. Attribute locations must be unique.",
+                    attribute.location
+                ));
+            }
+
+            let attribute_size = attribute
+                .get_size_in_bytes()
+                .ok_or_else(|| simple_error!("Attribute size overflow"))?;
+            let attribute_end = attribute
+                .offset
+                .checked_add(attribute_size)
+                .ok_or_else(|| simple_error!("Attribute byte range overflow"))?;
+
+            if attribute_end > stride {
+                return Err(simple_error!(
+                    "Attribute at location {} ends at byte {}, beyond vertex stride {}",
+                    attribute.location,
+                    attribute_end,
+                    stride
+                ));
+            }
+        }
 
         Ok(VertexLayout {
             stride,
@@ -133,6 +175,11 @@ impl<T: Pod> VertexLayout<T> {
     // Получить размер одного элемента в байтах
     pub fn get_stride(&self) -> usize {
         self.stride
+    }
+
+    // Получить список атрибутов
+    pub fn get_attributes(&self) -> &[VertexAttribute] {
+        &self.attributes
     }
 }
 
@@ -265,10 +312,12 @@ impl TryFrom<u32> for BufferMapperFlag {
     type Error = SimpleError;
 
     fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| simple_error!(
-            "Cannot create \"BufferMapperFlag\" value from \"u32\" value: {}",
-            value
-        ))
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"BufferMapperFlag\" value from \"u32\" value: {}",
+                value
+            )
+        })
     }
 }
 
@@ -296,5 +345,56 @@ impl<T: Pod> Drop for BufferMapper<T> {
         unsafe {
             UnmapBuffer(self.buffer.target as u32);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ValueType, VertexAttribute, VertexLayout};
+
+    #[repr(C)]
+    #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+    struct Vertex {
+        position: [f32; 3],
+        uv: [f32; 2],
+    }
+
+    fn attribute(
+        location: u32,
+        components: u8,
+        value_type: ValueType,
+        offset: usize,
+    ) -> VertexAttribute {
+        VertexAttribute {
+            location,
+            components,
+            value_type,
+            normalized: false,
+            offset,
+        }
+    }
+
+    #[test]
+    fn layout_accepts_attribute_at_nonzero_offset_that_fits_stride() {
+        let attributes = [
+            attribute(0, 3, ValueType::Float, 0),
+            attribute(1, 2, ValueType::Float, 12),
+        ];
+
+        assert!(VertexLayout::<Vertex>::new(&attributes).is_ok());
+    }
+
+    #[test]
+    fn layout_rejects_attribute_extending_past_stride() {
+        let attributes = [attribute(1, 2, ValueType::Float, 16)];
+
+        assert!(VertexLayout::<Vertex>::new(&attributes).is_err());
+    }
+
+    #[test]
+    fn layout_rejects_overflowing_attribute_range() {
+        let attributes = [attribute(1, 1, ValueType::Float, usize::MAX)];
+
+        assert!(VertexLayout::<Vertex>::new(&attributes).is_err());
     }
 }
