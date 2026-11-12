@@ -4,21 +4,10 @@ use super::buffer_object_target::BufferObjectTarget;
 use super::vbo::{VertexAttribute, VertexBufferObject, VertexLayout};
 use bytemuck::Pod;
 use gl::{
-    BindVertexArray, DeleteVertexArrays, EnableVertexAttribArray, GenVertexArrays,
+    BindVertexArray, DeleteVertexArrays, DrawArrays, EnableVertexAttribArray, GenVertexArrays,
+    LINE_LOOP, LINE_STRIP, LINE_STRIP_ADJACENCY, LINES, LINES_ADJACENCY, PATCHES, POINTS,
+    TRIANGLE_FAN, TRIANGLE_STRIP, TRIANGLE_STRIP_ADJACENCY, TRIANGLES, TRIANGLES_ADJACENCY,
     VertexAttribIPointer, VertexAttribLPointer, VertexAttribPointer,
-    DrawArrays,
-    POINTS,
-    LINE_STRIP,
-    LINE_LOOP,
-    LINES,
-    LINE_STRIP_ADJACENCY,
-    LINES_ADJACENCY,
-    TRIANGLE_STRIP,
-    TRIANGLE_FAN,
-    TRIANGLES,
-    TRIANGLE_STRIP_ADJACENCY,
-    TRIANGLES_ADJACENCY,
-    PATCHES,
 };
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use std::num::NonZeroU32;

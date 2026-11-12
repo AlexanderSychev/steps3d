@@ -1,5 +1,6 @@
 //! Различная "обвязка" для OpenGL
 
+pub mod blend;
 mod buffer;
 pub mod buffer_object;
 mod capability;
@@ -8,6 +9,8 @@ pub mod errors;
 mod extensions;
 mod limits;
 pub mod log;
+pub mod provoking_vertex;
+pub mod stencil_and_depth;
 mod typings;
 
 pub use buffer::Buffer;
