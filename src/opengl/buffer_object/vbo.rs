@@ -263,7 +263,11 @@ impl<T: Pod> VertexBufferObject<T> {
     /// Заменить содержимое буфера байтовым представлением среза `Pod`-значений.
     ///
     /// Функция возвращает ошибку, если размер данных не помещается в `GLsizeiptr`.
-    pub fn fill_buffer(&self, data: &[T], maybe_usage: Option<BufferDataUsage>) -> SimpleResult<()> {
+    pub fn fill_buffer(
+        &self,
+        data: &[T],
+        maybe_usage: Option<BufferDataUsage>,
+    ) -> SimpleResult<()> {
         let usage = maybe_usage.unwrap_or_default();
         let byte_len = data
             .len()

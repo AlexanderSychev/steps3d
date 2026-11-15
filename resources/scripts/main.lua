@@ -15,9 +15,12 @@ local app = cranberry.Application.new({
 
 local camera = cranberry.Camera.new(app, cranberry.CameraType.Perspective)
 
+local texture = cranberry.Texture.from_file("textures/crate.png");
+
 local box = cranberry.Mesh.box(app, 0.5, 1.5)
 box:move(0.0, 0.0, -1.0)
 box:rotate(45.0, 30.0, 60.0)
+box:set_texture(texture)
 
 app:on_next_frame(function (delta_factor)
   cranberry.debug_log('Delta factor:' .. delta_factor)
