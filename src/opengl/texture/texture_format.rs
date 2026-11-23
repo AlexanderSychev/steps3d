@@ -2,6 +2,7 @@
 
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use strum::FromRepr;
+use super::super::typings::impl_gl_enum_traits;
 
 /// Базовые ("безразмерные") форматы текстур
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
@@ -22,23 +23,6 @@ pub enum BaseTextureFormat {
     StencilIndex = gl::STENCIL_INDEX,
     DepthComponent = gl::DEPTH_COMPONENT,
     DepthStencil = gl::DEPTH_STENCIL,
-}
-impl PartialEq<u32> for BaseTextureFormat {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-impl TryFrom<u32> for BaseTextureFormat {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"BaseTextureFormat\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
 }
 
 /// Размерные форматы текстур
@@ -63,23 +47,6 @@ pub enum SizedTextureFormat {
     DepthComponent24 = gl::DEPTH_COMPONENT24,
     /// Трафарет
     Depth24Stencil8 = gl::DEPTH24_STENCIL8,
-}
-impl PartialEq<u32> for SizedTextureFormat {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-impl TryFrom<u32> for SizedTextureFormat {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"SizedTextureFormat\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
 }
 
 /// Внутренний формат текстур для OpenGL
@@ -134,3 +101,8 @@ impl From<InternalTextureFormat> for u32 {
         }
     }
 }
+
+impl_gl_enum_traits!(
+    BaseTextureFormat,
+    SizedTextureFormat,
+);

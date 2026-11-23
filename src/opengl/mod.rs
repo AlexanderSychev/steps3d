@@ -12,6 +12,7 @@ pub mod log;
 pub mod provoking_vertex;
 pub mod stencil_and_depth;
 pub mod texture;
+pub mod shader;
 mod typings;
 
 pub use buffer::Buffer;

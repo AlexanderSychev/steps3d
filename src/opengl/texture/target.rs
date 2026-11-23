@@ -2,6 +2,7 @@
 
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use strum::FromRepr;
+use super::super::typings::impl_gl_enum_traits;
 
 /// Назначение текстуры
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
@@ -18,23 +19,6 @@ pub enum TextureTarget {
     TextureBuffer = gl::TEXTURE_BUFFER,
     Texture2dMultisample = gl::TEXTURE_2D_MULTISAMPLE,
     Texture2dMultisampleArray = gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
-}
-impl PartialEq<u32> for TextureTarget {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-impl TryFrom<u32> for TextureTarget {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"TextureTarget\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
 }
 impl TextureTarget {
     /// Можно ли тестировать текстуру без выделения памяти
@@ -79,23 +63,6 @@ pub enum MipmappedTextureTarget {
     TextureCubeMap = gl::TEXTURE_CUBE_MAP,
     TextureCubeMapArray = gl::TEXTURE_CUBE_MAP_ARRAY,
 }
-impl PartialEq<u32> for MipmappedTextureTarget {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-impl TryFrom<u32> for MipmappedTextureTarget {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"MipmappedTextureTarget\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
-}
 impl TryFrom<TextureTarget> for MipmappedTextureTarget {
     type Error = SimpleError;
     fn try_from(value: TextureTarget) -> SimpleResult<Self> {
@@ -115,23 +82,6 @@ impl SupportsMipmaps for MipmappedTextureTarget {}
 #[repr(u32)]
 pub enum RectangleTextureTarget {
     TextureRectangle = gl::TEXTURE_RECTANGLE,
-}
-impl PartialEq<u32> for RectangleTextureTarget {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-impl TryFrom<u32> for RectangleTextureTarget {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"RectangleTextureTarget\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
 }
 impl TryFrom<TextureTarget> for RectangleTextureTarget {
     type Error = SimpleError;
@@ -153,23 +103,6 @@ pub enum UnsampledTextureTarget {
     TextureBuffer = gl::TEXTURE_BUFFER,
     Texture2dMultisample = gl::TEXTURE_2D_MULTISAMPLE,
     Texture2dMultisampleArray = gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
-}
-impl PartialEq<u32> for UnsampledTextureTarget {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-impl TryFrom<u32> for UnsampledTextureTarget {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"UnsampledTextureTarget\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
 }
 impl TryFrom<TextureTarget> for UnsampledTextureTarget {
     type Error = SimpleError;
@@ -195,23 +128,6 @@ pub enum ProxyTextureTarget {
     TextureRectangle = gl::PROXY_TEXTURE_RECTANGLE,
     TextureCubeMap = gl::PROXY_TEXTURE_CUBE_MAP,
 }
-impl PartialEq<u32> for ProxyTextureTarget {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-impl TryFrom<u32> for ProxyTextureTarget {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"ProxyTextureTarget\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
-}
 impl TryFrom<TextureTarget> for ProxyTextureTarget {
     type Error = SimpleError;
 
@@ -231,3 +147,11 @@ impl TryFrom<TextureTarget> for ProxyTextureTarget {
         }
     }
 }
+
+impl_gl_enum_traits!(
+    TextureTarget,
+    MipmappedTextureTarget,
+    RectangleTextureTarget,
+    UnsampledTextureTarget,
+    ProxyTextureTarget,
+);
