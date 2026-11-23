@@ -81,3 +81,38 @@ impl GlScalar for f32 {
 impl GlScalar for f64 {
     const VALUE_TYPE: ValueType = ValueType::Double;
 }
+
+/// Проверка на этапе компиляции, что константы OpenGL помещаются в i32.
+/// PS: Обычно, они помещаются, но всякое бывает.
+pub const fn gl_enum_to_i32(val: u32) -> i32 {
+    assert!(val <= i32::MAX as u32, "OpenGL constant exceeds i32::MAX");
+    val as i32
+}
+
+/// Реализует `PartialEq<u32>` и `TryFrom<u32>` для OpenGL-перечислений с `#[repr(u32)]` и derive-макросом `strum::FromRepr`
+macro_rules! impl_gl_enum_traits {
+    ($($type:ty),+ $(,)?) => {
+        $(
+            impl PartialEq<u32> for $type {
+                fn eq(&self, other: &u32) -> bool {
+                    *self as u32 == *other
+                }
+            }
+
+            impl TryFrom<u32> for $type {
+                type Error = simple_error::SimpleError;
+
+                fn try_from(value: u32) -> simple_error::SimpleResult<Self> {
+                    <$type>::from_repr(value).ok_or_else(|| {
+                        simple_error::simple_error!(format!(
+                            "Cannot create \"{}\" value from \"u32\" value: {}",
+                            stringify!($type),
+                            value
+                        ))
+                    })
+                }
+            }
+        )+
+    };
+}
+pub(crate) use impl_gl_enum_traits;

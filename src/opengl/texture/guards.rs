@@ -42,6 +42,11 @@ impl Drop for PixelUnpackAlignmentGuard {
     }
 }
 
+pub struct TextureIntegerParameterGuard {
+    /// Назначение текстуры
+    target: TextureTarget,
+}
+
 /// Защитник для привязки текстуры
 pub struct TextureBindingGuard {
     /// Назначение текстуры

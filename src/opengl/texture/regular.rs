@@ -3,7 +3,12 @@
 use super::super::errors::check_errors;
 use super::super::limits::Limits;
 use super::guards::{PixelUnpackAlignmentGuard, TextureBindingGuard};
-use super::target::TextureTarget;
+use super::parameter::{
+    BaseTextureMinFilter, BaseTextureParametersWizard, MipmappedTextureMinFilter,
+    MipmappedTextureParametersWizard, MipmappedTextureWrap, MipmappedTextureWrapMode,
+    TextureMagFilter, TextureWrapAxis,
+};
+use super::target::MipmappedTextureTarget;
 use crate::graphics::pictures::{MipMappedTexture, Picture};
 use simple_error::{SimpleResult, simple_error};
 use std::num::NonZeroU32;
@@ -16,7 +21,7 @@ pub struct RegularTexture {
     /// Высота текстуры в пикселях
     height: usize,
     /// Назначение текстуры
-    target: TextureTarget,
+    target: MipmappedTextureTarget,
     /// Идентификатор текстуры в OpenGL
     opengl_id: NonZeroU32,
 }
@@ -30,8 +35,33 @@ impl Drop for RegularTexture {
     }
 }
 impl RegularTexture {
-    /// Попробовать создать и загрузить в GPU текстуру из полученного изображения
+    /// Попробовать создать и загрузить в GPU текстуру из полученного изображения с настройками по-умолчанию
     pub fn try_from_picture(limits: &Limits, pic: &Picture) -> SimpleResult<RegularTexture> {
+        Self::try_from_picture_with_configure(limits, pic, |wizard| {
+            wizard.apply(MipmappedTextureWrap::new(
+                TextureWrapAxis::S,
+                MipmappedTextureWrapMode::Repeat,
+            ));
+            wizard.apply(MipmappedTextureWrap::new(
+                TextureWrapAxis::T,
+                MipmappedTextureWrapMode::Repeat,
+            ));
+            wizard.apply(TextureMagFilter::Nearest);
+            wizard.apply(BaseTextureMinFilter::Nearest);
+
+            Ok(())
+        })
+    }
+
+    /// Попробовать создать и загрузить в GPU текстуру из полученного изображения с последующей настройкой
+    pub fn try_from_picture_with_configure<F>(
+        limits: &Limits,
+        pic: &Picture,
+        configure: F,
+    ) -> SimpleResult<RegularTexture>
+    where
+        F: FnOnce(&BaseTextureParametersWizard<MipmappedTextureTarget>) -> SimpleResult<()>,
+    {
         // Преобразование и валидация размеров текстуры
         let width = pic.get_width();
         let height = pic.get_height();
@@ -58,7 +88,7 @@ impl RegularTexture {
         let gl_app_format = gl::RGBA;
 
         // Назначение текстуры
-        let target = TextureTarget::Texture2d;
+        let target = MipmappedTextureTarget::Texture2d;
 
         // Конвертируем пиксели в "сырой" набор байт
         let pixels: &[u8] = bytemuck::try_cast_slice(pic.get_pixels())
@@ -84,7 +114,7 @@ impl RegularTexture {
         };
 
         // Делаем текстуру текущей (на время выполнения метода)
-        let _binding_guard = TextureBindingGuard::new(target, opengl_id);
+        let _binding_guard = TextureBindingGuard::new(target.into(), opengl_id);
 
         // Загружаем пиксели в текстуру
         unsafe {
@@ -101,6 +131,9 @@ impl RegularTexture {
             );
         }
 
+        // Применяем настройки к текстуре
+        configure(&BaseTextureParametersWizard::new(target, opengl_id))?;
+
         // Проверяем на ошибки OpenGL: если при загрузке произошли ошибки,
         // то дескриптор текстуры должен автоматически удалиться
         check_errors()?;
@@ -108,10 +141,36 @@ impl RegularTexture {
         Ok(result)
     }
 
+    /// Попробовать создать и загрузить в GPU текстуру из полученного изображения с готовыми MIP-уровнями с настройками по умолчанию
     pub fn try_from_mip_mapped(
         limits: &Limits,
         mipmapped: &MipMappedTexture,
     ) -> SimpleResult<RegularTexture> {
+        Self::try_from_mip_mapped_with_configure(limits, mipmapped, |wizard| {
+            wizard.apply(MipmappedTextureWrap::new(
+                TextureWrapAxis::S,
+                MipmappedTextureWrapMode::Repeat,
+            ));
+            wizard.apply(MipmappedTextureWrap::new(
+                TextureWrapAxis::T,
+                MipmappedTextureWrapMode::Repeat,
+            ));
+            wizard.apply(TextureMagFilter::Linear);
+            wizard.apply(MipmappedTextureMinFilter::LinearMipmapLinear);
+
+            Ok(())
+        })
+    }
+
+    /// Попробовать создать и загрузить в GPU текстуру из полученного изображения с готовыми MIP-уровнями с последующей настройкой
+    pub fn try_from_mip_mapped_with_configure<F>(
+        limits: &Limits,
+        mipmapped: &MipMappedTexture,
+        configure: F,
+    ) -> SimpleResult<RegularTexture>
+    where
+        F: FnOnce(&MipmappedTextureParametersWizard<MipmappedTextureTarget>) -> SimpleResult<()>,
+    {
         // Преобразование и валидация размеров текстуры
         let width = mipmapped.get_width();
         let height = mipmapped.get_height();
@@ -138,7 +197,7 @@ impl RegularTexture {
         let gl_app_format = gl::RGBA;
 
         // Назначение текстуры
-        let target = TextureTarget::Texture2d;
+        let target = MipmappedTextureTarget::Texture2d;
 
         // Конвертируем пиксели каждого уровня в "сырые" наборы байт
         let mut raw_levels: Vec<&[u8]> = Vec::with_capacity(mipmapped.get_mip_levels_count());
@@ -169,7 +228,7 @@ impl RegularTexture {
         };
 
         // Делаем текстуру текущей (на время выполнения метода)
-        let _binding_guard = TextureBindingGuard::new(target, opengl_id);
+        let _binding_guard = TextureBindingGuard::new(target.into(), opengl_id);
 
         // Загружаем пиксели в текстуру
         let (mut level_width, mut level_height) = (gl_width, gl_height);
@@ -191,6 +250,9 @@ impl RegularTexture {
             level_width = (level_width / 2).max(1);
             level_height = (level_height / 2).max(1);
         }
+
+        // Применяем настройки к текстуре
+        configure(&MipmappedTextureParametersWizard::new(target, opengl_id))?;
 
         // Проверяем на ошибки OpenGL: если при загрузке произошли ошибки,
         // то дескриптор текстуры должен автоматически удалиться

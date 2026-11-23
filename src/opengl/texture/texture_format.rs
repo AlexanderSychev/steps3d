@@ -34,7 +34,7 @@ impl TryFrom<u32> for BaseTextureFormat {
     fn try_from(value: u32) -> SimpleResult<Self> {
         Self::from_repr(value).ok_or_else(|| {
             simple_error!(
-                "Cannot create \"TextureTarget\" value from \"u32\" value: {}",
+                "Cannot create \"BaseTextureFormat\" value from \"u32\" value: {}",
                 value
             )
         })
@@ -63,6 +63,23 @@ pub enum SizedTextureFormat {
     DepthComponent24 = gl::DEPTH_COMPONENT24,
     /// Трафарет
     Depth24Stencil8 = gl::DEPTH24_STENCIL8,
+}
+impl PartialEq<u32> for SizedTextureFormat {
+    fn eq(&self, other: &u32) -> bool {
+        *self as u32 == *other
+    }
+}
+impl TryFrom<u32> for SizedTextureFormat {
+    type Error = SimpleError;
+
+    fn try_from(value: u32) -> SimpleResult<Self> {
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"SizedTextureFormat\" value from \"u32\" value: {}",
+                value
+            )
+        })
+    }
 }
 
 /// Внутренний формат текстур для OpenGL

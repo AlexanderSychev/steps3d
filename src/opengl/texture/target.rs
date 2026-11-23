@@ -61,6 +61,128 @@ impl TextureTarget {
     }
 }
 
+/// Типаж-маркер для текстур, поддерживающих базовые параметры
+pub trait SupportsTextureParameters: Into<TextureTarget> + Copy {}
+
+/// Типаж-маркер для текстур, поддерживающих MIP-уровни и уровни детализации
+pub trait SupportsMipmaps: SupportsTextureParameters {}
+
+/// Обычные текстуры с мипмапами и полной поддержкой параметров
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
+#[repr(u32)]
+pub enum MipmappedTextureTarget {
+    Texture1d = gl::TEXTURE_1D,
+    Texture2d = gl::TEXTURE_2D,
+    Texture3d = gl::TEXTURE_3D,
+    Texture1dArray = gl::TEXTURE_1D_ARRAY,
+    Texture2dArray = gl::TEXTURE_2D_ARRAY,
+    TextureCubeMap = gl::TEXTURE_CUBE_MAP,
+    TextureCubeMapArray = gl::TEXTURE_CUBE_MAP_ARRAY,
+}
+impl PartialEq<u32> for MipmappedTextureTarget {
+    fn eq(&self, other: &u32) -> bool {
+        *self as u32 == *other
+    }
+}
+impl TryFrom<u32> for MipmappedTextureTarget {
+    type Error = SimpleError;
+
+    fn try_from(value: u32) -> SimpleResult<Self> {
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"MipmappedTextureTarget\" value from \"u32\" value: {}",
+                value
+            )
+        })
+    }
+}
+impl TryFrom<TextureTarget> for MipmappedTextureTarget {
+    type Error = SimpleError;
+    fn try_from(value: TextureTarget) -> SimpleResult<Self> {
+        MipmappedTextureTarget::try_from(value as u32)
+    }
+}
+impl From<MipmappedTextureTarget> for TextureTarget {
+    fn from(value: MipmappedTextureTarget) -> Self {
+        TextureTarget::from_repr(value as u32).unwrap()
+    }
+}
+impl SupportsTextureParameters for MipmappedTextureTarget {}
+impl SupportsMipmaps for MipmappedTextureTarget {}
+
+/// Прямоугольные текстуры (поддерживают фильтрацию и swizzle, но без мипмапов и Repeat)
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
+#[repr(u32)]
+pub enum RectangleTextureTarget {
+    TextureRectangle = gl::TEXTURE_RECTANGLE,
+}
+impl PartialEq<u32> for RectangleTextureTarget {
+    fn eq(&self, other: &u32) -> bool {
+        *self as u32 == *other
+    }
+}
+impl TryFrom<u32> for RectangleTextureTarget {
+    type Error = SimpleError;
+
+    fn try_from(value: u32) -> SimpleResult<Self> {
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"RectangleTextureTarget\" value from \"u32\" value: {}",
+                value
+            )
+        })
+    }
+}
+impl TryFrom<TextureTarget> for RectangleTextureTarget {
+    type Error = SimpleError;
+    fn try_from(value: TextureTarget) -> SimpleResult<Self> {
+        RectangleTextureTarget::try_from(value as u32)
+    }
+}
+impl From<RectangleTextureTarget> for TextureTarget {
+    fn from(value: RectangleTextureTarget) -> Self {
+        TextureTarget::from_repr(value as u32).unwrap()
+    }
+}
+impl SupportsTextureParameters for RectangleTextureTarget {}
+
+/// Текстуры без поддержки параметров (Buffer, Multisample)
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
+#[repr(u32)]
+pub enum UnsampledTextureTarget {
+    TextureBuffer = gl::TEXTURE_BUFFER,
+    Texture2dMultisample = gl::TEXTURE_2D_MULTISAMPLE,
+    Texture2dMultisampleArray = gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
+}
+impl PartialEq<u32> for UnsampledTextureTarget {
+    fn eq(&self, other: &u32) -> bool {
+        *self as u32 == *other
+    }
+}
+impl TryFrom<u32> for UnsampledTextureTarget {
+    type Error = SimpleError;
+
+    fn try_from(value: u32) -> SimpleResult<Self> {
+        Self::from_repr(value).ok_or_else(|| {
+            simple_error!(
+                "Cannot create \"UnsampledTextureTarget\" value from \"u32\" value: {}",
+                value
+            )
+        })
+    }
+}
+impl TryFrom<TextureTarget> for UnsampledTextureTarget {
+    type Error = SimpleError;
+    fn try_from(value: TextureTarget) -> SimpleResult<Self> {
+        UnsampledTextureTarget::try_from(value as u32)
+    }
+}
+impl From<UnsampledTextureTarget> for TextureTarget {
+    fn from(value: UnsampledTextureTarget) -> Self {
+        TextureTarget::from_repr(value as u32).unwrap()
+    }
+}
+
 /// Специальные таргеты для тестирования возможностей GPU без выделения памяти
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
