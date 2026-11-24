@@ -1,8 +1,8 @@
 //! Назначнение текстур
 
+use super::super::typings::impl_gl_enum_traits;
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use strum::FromRepr;
-use super::super::typings::impl_gl_enum_traits;
 
 /// Назначение текстуры
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]

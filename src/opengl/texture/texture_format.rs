@@ -1,8 +1,8 @@
 //! Форматы текстур
 
+use super::super::typings::impl_gl_enum_traits;
 use simple_error::{SimpleError, SimpleResult, simple_error};
 use strum::FromRepr;
-use super::super::typings::impl_gl_enum_traits;
 
 /// Базовые ("безразмерные") форматы текстур
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
@@ -102,7 +102,4 @@ impl From<InternalTextureFormat> for u32 {
     }
 }
 
-impl_gl_enum_traits!(
-    BaseTextureFormat,
-    SizedTextureFormat,
-);
+impl_gl_enum_traits!(BaseTextureFormat, SizedTextureFormat,);
