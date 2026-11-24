@@ -47,7 +47,7 @@ use glam::{Vec2, Vec3, Vec4};
 impl UniformData for Vec2 {
     fn set_uniform_value(&self, location: i32) {
         unsafe {
-            gl::Uniform1fv(location, 2, self.to_array().as_ptr());
+            gl::Uniform2fv(location, 1, self.to_array().as_ptr());
         }
     }
 }
@@ -56,7 +56,7 @@ impl UniformData for Vec2 {
 impl UniformData for Vec3 {
     fn set_uniform_value(&self, location: i32) {
         unsafe {
-            gl::Uniform1fv(location, 3, self.to_array().as_ptr());
+            gl::Uniform3fv(location, 1, self.to_array().as_ptr());
         }
     }
 }
@@ -65,7 +65,7 @@ impl UniformData for Vec3 {
 impl UniformData for Vec4 {
     fn set_uniform_value(&self, location: i32) {
         unsafe {
-            gl::Uniform1fv(location, 4, self.to_array().as_ptr());
+            gl::Uniform4fv(location, 1, self.to_array().as_ptr());
         }
     }
 }
@@ -74,21 +74,23 @@ impl UniformData for Vec4 {
 // - Передача цветов -
 // -------------------
 
-use palette::{LinSrgb, Srgb, LinSrgba, Srgba};
+use palette::{LinSrgb, LinSrgba, Srgb, Srgba};
 
 impl UniformData for LinSrgb<f32> {
     fn set_uniform_value(&self, location: i32) {
         let flat: [f32; 3] = (*self).into();
         unsafe {
-            gl::Uniform1fv(location, 3, flat.as_ptr());
+            gl::Uniform3fv(location, 1, flat.as_ptr());
         }
     }
 }
 
 impl UniformData for Srgb<f32> {
     fn set_uniform_value(&self, location: i32) {
-        let linear = self.into_linear();
-        linear.set_uniform_value(location);
+        let flat: [f32; 3] = (*self).into();
+        unsafe {
+            gl::Uniform3fv(location, 1, flat.as_ptr());
+        }
     }
 }
 
@@ -96,15 +98,17 @@ impl UniformData for LinSrgba<f32> {
     fn set_uniform_value(&self, location: i32) {
         let flat: [f32; 4] = (*self).into();
         unsafe {
-            gl::Uniform1fv(location, 4, flat.as_ptr());
+            gl::Uniform4fv(location, 1, flat.as_ptr());
         }
     }
 }
 
 impl UniformData for Srgba<f32> {
     fn set_uniform_value(&self, location: i32) {
-        let linear = self.into_linear();
-        linear.set_uniform_value(location);
+        let flat: [f32; 4] = (*self).into();
+        unsafe {
+            gl::Uniform4fv(location, 1, flat.as_ptr());
+        }
     }
 }
 
