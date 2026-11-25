@@ -1,11 +1,11 @@
 //! Высокоуровневый графический модуль, не привязанный к конкретному графическому API
 
 mod camera;
-mod constraints;
 mod mesh;
 mod pictures;
+mod transform;
 
 pub use camera::*;
-pub use constraints::*;
 pub use mesh::*;
 pub use pictures::*;
+pub use transform::*;

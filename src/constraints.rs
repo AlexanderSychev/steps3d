@@ -43,12 +43,12 @@ impl Viewport {
         self.height = height;
     }
 
-    /// Получить соотношение сторон
+    /// Получить соотношение сторон (ширина деленная на высоту)
     pub fn get_aspect_ratio(&self) -> f32 {
         self.width as f32 / self.height as f32
     }
 
-    /// Получить обратное соотношение сторон
+    /// Получить обратное соотношение сторон (высота деленная на ширину)
     pub fn get_aspect_ratio_inversed(&self) -> f32 {
         self.height as f32 / self.width as f32
     }

@@ -1,26 +1,30 @@
 //! Камера
 
-use super::constraints::{AngleRadians, Viewport};
+use super::super::constraints::{AngleRadians, Viewport};
 use glam::Vec3;
-use sdl2::keyboard::Scancode::E;
 use simple_error::{SimpleResult, simple_error};
 use std::f32::consts::PI;
 
-/// Параметры фабричного метода "try_new" для создания камеры: то, что нельзя вычислить по другим полям
-#[derive(Debug, Clone, Copy)]
-pub struct NewPerspectiveCameraParams {
-    /// Позиция камеры
-    pub position: Vec3,
-    /// Базис камеры - направление взгляда
-    pub view: Vec3,
-    /// Базис камеры - направление наверх
-    pub up: Vec3,
-    /// Угол обзора по оси X (в градусах)
-    pub field_of_view_x: f32,
-    /// Ширина кадра камеры (в пикселях)
-    pub width: u32,
-    /// Высота кадра камеры (в пикселях)
-    pub height: u32,
+/// Базис камеры
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct CameraBasis {
+    /// Вектор направления взгляда
+    view: Vec3,
+    /// Вектор направления вверх
+    up: Vec3,
+    /// Вектор направления вправо
+    right: Vec3,
+}
+impl Default for CameraBasis {
+    fn default() -> Self {
+        // Стандартный базис камеры
+        let view = Vec3::new(0.0, 0.0, 1.0);
+        let view = view / view.length();
+        let up = Vec3::new(0.0, 1.0, 0.0);
+        let right = up.cross(view).normalize();
+        let up = view.cross(right).normalize();
+        Self { view, up, right }
+    }
 }
 
 ///
@@ -28,12 +32,8 @@ pub struct NewPerspectiveCameraParams {
 pub struct PerspectiveCamera {
     /// Позиция камеры
     position: Vec3,
-    /// Базис камеры - направление взгляда
-    view: Vec3,
-    /// Базис камеры - направление наверх
-    up: Vec3,
-    /// Базис камеры - направление вправо
-    right: Vec3,
+    /// Базис камеры
+    basis: CameraBasis,
     /// Область просмотра камеры
     viewport: Viewport,
     /// Угол обзора по оси X (в радианах)
@@ -48,12 +48,7 @@ impl PerspectiveCamera {
         viewport: Viewport,
         field_of_view_x: AngleRadians,
     ) -> SimpleResult<Self> {
-        // Вычисляем базис камеры
-        let view = Vec3::new(0.0, 0.0, 1.0);
-        let view = view / view.length();
-        let up = Vec3::new(0.0, 1.0, 0.0);
-        let right = up.cross(view).normalize();
-        let up = view.cross(right).normalize();
+        let basis = CameraBasis::default();
 
         if field_of_view_x.get() >= PI {
             return Err(simple_error!("Field of view X must be less than PI"));
@@ -61,14 +56,12 @@ impl PerspectiveCamera {
 
         // Вычисляем угол обзора по оси Y
         let aspect_ratio_inversed = viewport.get_aspect_ratio_inversed();
-        let field_of_view_y = 2.0
-            * ((field_of_view_x.get() * 0.5).tan() * aspect_ratio_inversed).atan();
+        let field_of_view_y =
+            2.0 * ((field_of_view_x.get() * 0.5).tan() * aspect_ratio_inversed).atan();
 
         Ok(Self {
             position,
-            view,
-            up,
-            right,
+            basis,
             viewport,
             field_of_view_x: field_of_view_x.get(),
             field_of_view_y,
