@@ -1,7 +1,11 @@
 //! Высокоуровневый графический модуль, не привязанный к конкретному графическому API
 
-pub mod mesh;
-pub mod pictures;
+mod camera;
+mod constraints;
+mod mesh;
+mod pictures;
 
+pub use camera::*;
+pub use constraints::*;
 pub use mesh::*;
 pub use pictures::*;

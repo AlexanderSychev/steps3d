@@ -9,7 +9,7 @@ use super::parameter::{
     TextureMagFilter, TextureWrapAxis,
 };
 use super::target::MipmappedTextureTarget;
-use crate::graphics::pictures::{MipMappedTexture, Picture};
+use crate::graphics::{MipMappedTexture, Picture};
 use simple_error::{SimpleResult, simple_error};
 use std::num::NonZeroU32;
 
