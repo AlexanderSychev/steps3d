@@ -181,7 +181,7 @@ impl FieldOfView {
     }
 
     /// Изменить область просмотра. Второй аргумент (необязательный) позволяет настроить ось,
-    /// угол которой останется прежим (по-умолчанию это X).
+    /// угол которой останется прежним (по-умолчанию это X).
     pub fn set_viewport(
         &mut self,
         viewport: Viewport,
@@ -430,7 +430,7 @@ impl PerspectiveCamera {
 
     /// Возвращает матрицу вида (View Matrix) для левостороннего мира
     pub fn get_view_matrix(&self) -> Mat4 {
-        // self.view() и self.up() уже нормализованы
+        // self.get_view() и self.get_up() уже нормализованы
         look_to_mat4(self.position, self.get_view(), self.get_up())
     }
 
