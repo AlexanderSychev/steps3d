@@ -29,8 +29,12 @@ impl Viewport {
     }
 
     /// Задать ширину в пикселях
-    pub fn set_width(&mut self, width: u32) {
+    pub fn set_width(&mut self, width: u32) -> SimpleResult<()> {
+        if width == 0 {
+            return Err(simple_error!("Width cannot be zero"));
+        }
         self.width = width;
+        Ok(())
     }
 
     /// Получить высоту в пикселях
@@ -39,8 +43,25 @@ impl Viewport {
     }
 
     /// Задать высоту в пикселях
-    pub fn set_height(&mut self, height: u32) {
+    pub fn set_height(&mut self, height: u32) -> SimpleResult<()> {
+        if height == 0 {
+            return Err(simple_error!("Height cannot be zero"));
+        }
         self.height = height;
+        Ok(())
+    }
+
+    /// Задать новые размеры области видимости
+    pub fn resize(&mut self, width: u32, height: u32) -> SimpleResult<()> {
+        if width == 0 {
+            return Err(simple_error!("Width cannot be zero"));
+        }
+        if height == 0 {
+            return Err(simple_error!("Height cannot be zero"));
+        }
+        self.width = width;
+        self.height = height;
+        Ok(())
     }
 
     /// Получить соотношение сторон (ширина деленная на высоту)
@@ -51,35 +72,5 @@ impl Viewport {
     /// Получить обратное соотношение сторон (высота деленная на ширину)
     pub fn get_aspect_ratio_inversed(&self) -> f32 {
         self.height as f32 / self.width as f32
-    }
-}
-
-/// Угол в радианах
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AngleRadians {
-    /// Значение угла
-    angle: f32,
-}
-impl AngleRadians {
-    /// Создаёт новый угол в радианах с проверкой значения
-    pub fn try_new(angle: f32) -> SimpleResult<AngleRadians> {
-        if !angle.is_finite() || (0.0..2.0 * PI).contains(&angle) {
-            return Err(simple_error!("Angle must be in range [0, 2π]"));
-        }
-        Ok(AngleRadians { angle })
-    }
-
-    /// Получить значение угла в радианах
-    pub fn get(&self) -> f32 {
-        self.angle
-    }
-
-    /// Задать значение угла с проверкой
-    pub fn set(&mut self, angle: f32) -> SimpleResult<()> {
-        if !angle.is_finite() || (0.0..2.0 * PI).contains(&angle) {
-            return Err(simple_error!("Angle must be in range [0, 2π]"));
-        }
-        self.angle = angle;
-        Ok(())
     }
 }

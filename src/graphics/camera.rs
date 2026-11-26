@@ -1,41 +1,105 @@
 //! Камера
 
-use super::super::constraints::{AngleRadians, Viewport};
-use glam::Vec3;
+use super::super::constraints::Viewport;
+use super::transform::MovableEntity;
+use glam::camera::lh::proj::opengl::perspective;
+use glam::camera::lh::view::look_to_mat4;
+use glam::{EulerRot, Mat4, Quat, Vec3};
 use simple_error::{SimpleResult, simple_error};
 use std::f32::consts::PI;
 
-/// Базис камеры
+/// Плоскости отсечения (по оси Z)
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct CameraBasis {
-    /// Вектор направления взгляда
-    view: Vec3,
-    /// Вектор направления вверх
-    up: Vec3,
-    /// Вектор направления вправо
-    right: Vec3,
+pub struct ClippingPlanes {
+    /// Ближняя
+    near: f32,
+    /// Дальняя
+    far: f32,
 }
-impl Default for CameraBasis {
+impl ClippingPlanes {
+    pub fn try_new(near: f32, far: f32) -> SimpleResult<Self> {
+        if !near.is_finite() {
+            return Err(simple_error!("Near clipping plane value must be finite"));
+        }
+        if near <= 0.0 {
+            return Err(simple_error!("Near clipping plane value must be positive"));
+        }
+        if !far.is_finite() {
+            return Err(simple_error!("Far clipping plane value must be finite"));
+        }
+        if far <= near {
+            return Err(simple_error!(
+                "Far clipping plane value must be greater than near"
+            ));
+        }
+
+        Ok(Self { near, far })
+    }
+
+    /// Получить ближнюю плоскость отсечения
+    pub fn get_near(&self) -> f32 {
+        self.near
+    }
+
+    /// Задать ближнюю плоскость отсечения
+    pub fn set_near(&mut self, near: f32) -> SimpleResult<()> {
+        if !near.is_finite() {
+            return Err(simple_error!("Near clipping plane value must be finite"));
+        }
+        if near <= 0.0 {
+            return Err(simple_error!("Near clipping plane value must be positive"));
+        }
+        if self.far <= near {
+            return Err(simple_error!(
+                "Far clipping plane value must be greater than near"
+            ));
+        }
+        self.near = near;
+
+        Ok(())
+    }
+
+    /// Получить дальнюю плоскость отсечения
+    pub fn get_far(&self) -> f32 {
+        self.far
+    }
+
+    /// Задать дальнюю плоскость отсечения
+    pub fn set_far(&mut self, far: f32) -> SimpleResult<()> {
+        if !far.is_finite() {
+            return Err(simple_error!("Far clipping plane value must be finite"));
+        }
+        if far <= self.near {
+            return Err(simple_error!(
+                "Far clipping plane value must be greater than near"
+            ));
+        }
+
+        self.far = far;
+
+        Ok(())
+    }
+}
+impl Default for ClippingPlanes {
     fn default() -> Self {
-        // Стандартный базис камеры
-        let view = Vec3::new(0.0, 0.0, 1.0);
-        let view = view / view.length();
-        let up = Vec3::new(0.0, 1.0, 0.0);
-        let right = up.cross(view).normalize();
-        let up = view.cross(right).normalize();
-        Self { view, up, right }
+        Self {
+            near: 0.1,
+            far: 1000.0,
+        }
     }
 }
 
-///
+/// Перспективная камера
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PerspectiveCamera {
     /// Позиция камеры
     position: Vec3,
-    /// Базис камеры
-    basis: CameraBasis,
+    /// Ориентация камеры в пространстве
+    orientation: Quat,
     /// Область просмотра камеры
     viewport: Viewport,
+    /// Плоскости отсечения
+    clipping: ClippingPlanes,
     /// Угол обзора по оси X (в радианах)
     field_of_view_x: f32,
     /// Угол обзора по оси Y (в радианах)
@@ -44,44 +108,59 @@ pub struct PerspectiveCamera {
 impl PerspectiveCamera {
     /// Попробовать создать камеру со стандартным базисом
     pub fn try_new(
+        field_of_view_x: f32,
         position: Vec3,
         viewport: Viewport,
-        field_of_view_x: AngleRadians,
+        clipping: ClippingPlanes,
     ) -> SimpleResult<Self> {
-        let basis = CameraBasis::default();
-
-        if field_of_view_x.get() >= PI {
-            return Err(simple_error!("Field of view X must be less than PI"));
+        if !(0.0..PI).contains(&field_of_view_x) {
+            return Err(simple_error!(
+                "X-axis field of view angle must be in range (0, π)"
+            ));
+        }
+        if !position.is_finite() {
+            return Err(simple_error!(
+                "Position point must contain only finite values"
+            ));
         }
 
         // Вычисляем угол обзора по оси Y
         let aspect_ratio_inversed = viewport.get_aspect_ratio_inversed();
-        let field_of_view_y =
-            2.0 * ((field_of_view_x.get() * 0.5).tan() * aspect_ratio_inversed).atan();
+        let field_of_view_y = 2.0 * ((field_of_view_x * 0.5).tan() * aspect_ratio_inversed).atan();
 
         Ok(Self {
             position,
-            basis,
+            orientation: Quat::IDENTITY,
             viewport,
-            field_of_view_x: field_of_view_x.get(),
+            clipping,
+            field_of_view_x,
             field_of_view_y,
         })
     }
 
-    /// Получить позицию камеры
-    pub fn get_position(&self) -> Vec3 {
-        self.position
+    // Получение векторов базиса
+
+    /// Получить направление вправо для базиса камеры
+    pub fn get_right(&self) -> Vec3 {
+        self.orientation * Vec3::X
     }
 
-    /// Задать позицию камеры
-    pub fn set_position(&mut self, position: Vec3) {
-        self.position = position;
+    /// Получить направление вверх для базиса камеры
+    pub fn get_up(&self) -> Vec3 {
+        self.orientation * Vec3::Y
     }
 
-    pub fn get_viewort(&self) -> Viewport {
+    /// Получить направление взгляда для базиса камеры
+    pub fn get_view(&self) -> Vec3 {
+        self.orientation * Vec3::Z
+    }
+
+    /// Получить область просмотра
+    pub fn get_viewport(&self) -> Viewport {
         self.viewport
     }
 
+    /// Изменить область просмотра
     pub fn set_viewport(&mut self, viewport: Viewport) {
         self.viewport = viewport;
 
@@ -91,16 +170,123 @@ impl PerspectiveCamera {
                 .atan();
     }
 
+    /// Получить угол обзора по оси X (в радианах)
     pub fn get_field_of_view_x(&self) -> f32 {
         self.field_of_view_x
     }
 
-    pub fn set_field_of_view_x(&mut self, field_of_view_x: AngleRadians) {
-        self.field_of_view_x = field_of_view_x.get();
+    /// Задать угол обзора по оси X (в радианах)
+    pub fn set_field_of_view_x(&mut self, field_of_view_x: f32) -> SimpleResult<()> {
+        if !(0.0..PI).contains(&field_of_view_x) {
+            return Err(simple_error!(
+                "X-axis field of view angle must be in range (0, π)"
+            ));
+        }
+        self.field_of_view_x = field_of_view_x;
 
         // Пересчитываем угол обзора по оси Y при изменении области просмотра
         self.field_of_view_y = 2.0
             * ((self.field_of_view_x * 0.5).tan() * self.viewport.get_aspect_ratio_inversed())
                 .atan();
+
+        Ok(())
+    }
+
+    /// Получить отсекающие плоскости для чтения
+    pub fn get_clipping(&self) -> ClippingPlanes {
+        self.clipping
+    }
+
+    /// Получить отсекающие плоскости для записи
+    pub fn get_clipping_mut(&mut self) -> &mut ClippingPlanes {
+        &mut self.clipping
+    }
+
+    /// Задать новые отсекающие плоскости
+    pub fn set_clipping(&mut self, clipping: ClippingPlanes) {
+        self.clipping = clipping
+    }
+
+    /// Получить позицию камеры
+    pub fn get_position(&self) -> Vec3 {
+        self.position
+    }
+
+    /// Возвращает матрицу вида (View Matrix) для левостороннего мира
+    pub fn get_view_matrix(&self) -> Mat4 {
+        // self.view() и self.up() уже нормализованы
+        look_to_mat4(self.position, self.get_view(), self.get_up())
+    }
+
+    /// Возвращает матрицу проекции (Projection Matrix) для OpenGL
+    pub fn get_projection_matrix(&self) -> Mat4 {
+        perspective(
+            self.field_of_view_y,
+            self.viewport.get_aspect_ratio(),
+            self.clipping.near,
+            self.clipping.far,
+        )
+    }
+}
+impl MovableEntity for PerspectiveCamera {
+    fn position_entity(&mut self, position: Vec3) -> SimpleResult<()> {
+        if !position.is_finite() {
+            return Err(simple_error!(
+                "Position point must contain only finite values"
+            ));
+        }
+        self.position = position;
+        Ok(())
+    }
+
+    fn move_entity(&mut self, deltas: Vec3) -> SimpleResult<()> {
+        if !deltas.is_finite() {
+            return Err(simple_error!(
+                "Position deltas must contain only finite values"
+            ));
+        }
+        self.position += self.orientation * deltas;
+        Ok(())
+    }
+
+    fn translate_entity(&mut self, deltas: Vec3) -> SimpleResult<()> {
+        if !deltas.is_finite() {
+            return Err(simple_error!(
+                "Position deltas must contain only finite values"
+            ));
+        }
+        self.position += deltas;
+        Ok(())
+    }
+
+    fn rotate_entity(&mut self, angles: Vec3) -> SimpleResult<()> {
+        if !angles.is_finite() {
+            return Err(simple_error!(
+                "Rotation angles must contain only finite values"
+            ));
+        }
+        self.orientation = Quat::from_euler(
+            EulerRot::YXZ,
+            -angles.y, // Yaw
+            -angles.x, // Pitch
+            -angles.z, // Roll
+        );
+        Ok(())
+    }
+
+    fn turn_entity(&mut self, angle_deltas: Vec3) -> SimpleResult<()> {
+        if !angle_deltas.is_finite() {
+            return Err(simple_error!(
+                "Rotation angles must contain only finite values"
+            ));
+        }
+        let delta_rot = Quat::from_euler(
+            EulerRot::YXZ,
+            -angle_deltas.y,
+            -angle_deltas.x,
+            -angle_deltas.z,
+        );
+        self.orientation = (self.orientation * delta_rot).normalize();
+        Ok(())
     }
 }
