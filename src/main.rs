@@ -5,7 +5,6 @@ use crate::opengl::CapabilityManager;
 mod app;
 mod canvas;
 mod color;
-mod constraints;
 mod geometry;
 mod graphics;
 mod light;
