@@ -1,6 +1,6 @@
 //! Камера
 
-use super::transform::MovableEntity;
+use super::scene::SceneEntity;
 use glam::camera::lh::proj::opengl::perspective;
 use glam::camera::lh::view::look_to_mat4;
 use glam::{EulerRot, Mat4, Quat, Vec3};
@@ -444,7 +444,7 @@ impl PerspectiveCamera {
         )
     }
 }
-impl MovableEntity for PerspectiveCamera {
+impl SceneEntity for PerspectiveCamera {
     fn position_entity(&mut self, position: Vec3) -> SimpleResult<()> {
         if !position.is_finite() {
             return Err(simple_error!(
@@ -504,5 +504,9 @@ impl MovableEntity for PerspectiveCamera {
         );
         self.orientation = (self.orientation * delta_rot).normalize();
         Ok(())
+    }
+
+    fn scale_entity(&mut self, _: Vec3) -> SimpleResult<()> {
+        Err(simple_error!("Camera is not scalable"))
     }
 }
