@@ -183,6 +183,53 @@ impl<T: Pod> VertexLayout<T> {
     }
 }
 
+/// Утилита-защитник для привязки буфера OpenGL с последущей отвязкой при выходе из области видимости
+pub struct CurrentVertexBufferObjectGuard<'a, T: Pod> {
+    /// Буфер, который был привязан до этого (`0` если никакого буфера не было привязано)
+    previous_buffer: u32,
+    /// Буфер, который будет привязан
+    next_buffer: u32,
+    /// Назначение буфера
+    target: u32,
+    /// "Метка" для компилятора
+    _marker: PhantomData<&'a VertexBufferObject<T>>,
+}
+impl<'a, T: Pod> CurrentVertexBufferObjectGuard<'a, T> {
+    fn new(next_buffer: &'a VertexBufferObject<T>) -> Self {
+        let parameter_name: BufferObjectBinding = next_buffer.target.into();
+        let target = next_buffer.target as u32;
+
+        let next_buffer_raw = next_buffer.opengl_id.get();
+        let mut previous_buffer = 0;
+        unsafe {
+            gl::GetIntegerv(parameter_name as u32, &mut previous_buffer);
+        }
+        let previous_buffer_raw = previous_buffer as u32;
+
+        if previous_buffer_raw != next_buffer_raw {
+            unsafe {
+                gl::BindBuffer(next_buffer.target as u32, next_buffer.opengl_id.get());
+            }
+        }
+
+        Self {
+            previous_buffer: previous_buffer_raw,
+            next_buffer: next_buffer_raw,
+            target,
+            _marker: PhantomData,
+        }
+    }
+}
+impl<'a, T: Pod> Drop for CurrentVertexBufferObjectGuard<'_, T> {
+    fn drop(&mut self) {
+        if self.previous_buffer != self.next_buffer {
+            unsafe {
+                gl::BindBuffer(self.target, self.next_buffer);
+            }
+        }
+    }
+}
+
 /// Буфер OpenGL (VBO)
 #[derive(Debug, PartialEq)]
 pub struct VertexBufferObject<T: Pod> {
@@ -240,24 +287,9 @@ impl<T: Pod> VertexBufferObject<T> {
         self.target
     }
 
-    /// Проверить, является ли данный VBO текущим
-    pub fn is_bound(&self) -> bool {
-        match VertexBufferObject::<T>::get_current(self.target) {
-            Some(current) => current == self.opengl_id,
-            None => false,
-        }
-    }
-
     /// Назначить VBO текущим
-    pub fn bind(&self) {
-        unsafe { BindBuffer(self.target as u32, self.opengl_id.get()) }
-    }
-
-    /// Отвязать VBO от текущего состояния
-    pub fn unbind(&self) {
-        if self.is_bound() {
-            VertexBufferObject::<T>::unbind_current(self.target);
-        }
+    pub fn bind(&self) -> CurrentVertexBufferObjectGuard<'_, T> {
+        CurrentVertexBufferObjectGuard::new(&self)
     }
 
     /// Заменить содержимое буфера байтовым представлением среза `Pod`-значений.
@@ -282,7 +314,7 @@ impl<T: Pod> VertexBufferObject<T> {
             bytes.as_ptr().cast()
         };
 
-        self.bind();
+        let _binding = self.bind();
 
         unsafe {
             gl::BufferData(self.target as u32, size, data_ptr, usage.into());
@@ -294,7 +326,6 @@ impl<T: Pod> VertexBufferObject<T> {
 
 impl<T: Pod> Drop for VertexBufferObject<T> {
     fn drop(&mut self) {
-        self.unbind();
         unsafe { DeleteBuffers(1, &self.opengl_id.get()) };
     }
 }

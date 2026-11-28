@@ -3,56 +3,75 @@ use super::super::typings::ValueType;
 use super::buffer_object_target::BufferObjectTarget;
 use super::vbo::{VertexAttribute, VertexBufferObject, VertexLayout};
 use bytemuck::Pod;
-use gl::{
-    BindVertexArray, DeleteVertexArrays, DrawArrays, EnableVertexAttribArray, GenVertexArrays,
-    LINE_LOOP, LINE_STRIP, LINE_STRIP_ADJACENCY, LINES, LINES_ADJACENCY, PATCHES, POINTS,
-    TRIANGLE_FAN, TRIANGLE_STRIP, TRIANGLE_STRIP_ADJACENCY, TRIANGLES, TRIANGLES_ADJACENCY,
-    VertexAttribIPointer, VertexAttribLPointer, VertexAttribPointer,
-};
-use simple_error::{SimpleError, SimpleResult, simple_error};
+use simple_error::{SimpleResult, simple_error};
 use std::num::NonZeroU32;
 use strum::FromRepr;
+use super::super::typings::impl_gl_enum_traits;
+use std::marker::PhantomData;
 
 /// Режимы отрисовки
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum ArrayDrawMode {
     /// Точки
-    Points = POINTS,
+    Points = gl::POINTS,
     /// Отрезки
-    LineStrip = LINE_STRIP,
+    LineStrip = gl::LINE_STRIP,
     /// Многоугольники из отрезков
-    LineLoop = LINE_LOOP,
+    LineLoop = gl::LINE_LOOP,
     /// Ломаные
-    Lines = LINES,
-    LineStripAdjacency = LINE_STRIP_ADJACENCY,
-    LinesAdjacency = LINES_ADJACENCY,
-    TriangleStrip = TRIANGLE_STRIP,
+    Lines = gl::LINES,
+    LineStripAdjacency = gl::LINE_STRIP_ADJACENCY,
+    LinesAdjacency = gl::LINES_ADJACENCY,
+    TriangleStrip = gl::TRIANGLE_STRIP,
     /// Полигоны трегуольников
-    TriangleFan = TRIANGLE_FAN,
+    TriangleFan = gl::TRIANGLE_FAN,
     /// Треугольники
-    Triangles = TRIANGLES,
-    TriangleStripAdjacency = TRIANGLE_STRIP_ADJACENCY,
-    TrianglesAdjacency = TRIANGLES_ADJACENCY,
-    Patches = PATCHES,
+    Triangles = gl::TRIANGLES,
+    TriangleStripAdjacency = gl::TRIANGLE_STRIP_ADJACENCY,
+    TrianglesAdjacency = gl::TRIANGLES_ADJACENCY,
+    Patches = gl::PATCHES,
 }
+impl_gl_enum_traits!(ArrayDrawMode);
 
-impl PartialEq<u32> for ArrayDrawMode {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
+/// Утилита-защитник для привязки VAO с последующей отвязкой при выходе из области видимости
+pub struct CurrentArrayObjectGuard<'a> {
+    /// Предыдущий привязанный VAO (`0`, если такого не было)
+    previous: u32,
+    /// Следующий привязанный VAO
+    next: u32,
+    /// "Метка" для компилятора
+    _marker: PhantomData<&'a ArrayObject>,
+}
+impl <'a> CurrentArrayObjectGuard<'a> {
+    fn new(next: &'a ArrayObject) -> Self {
+        let next_raw = next.opengl_id.get();
+        let mut previous = 0;
+        unsafe {
+            gl::GetIntegerv(gl::VERTEX_ARRAY_BINDING, &mut previous);
+        }
+        let previous_raw = previous as u32;
+
+        if previous_raw != next_raw {
+            unsafe {
+                gl::BindVertexArray(next_raw);
+            }
+        }
+
+        Self {
+            previous: previous_raw,
+            next: next_raw,
+            _marker: PhantomData
+        }
     }
 }
-
-impl TryFrom<u32> for ArrayDrawMode {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"ArrayDrawMode\" value from \"u32\" value: {}",
-                value
-            )
-        })
+impl Drop for CurrentArrayObjectGuard<'_> {
+    fn drop(&mut self) {
+        if self.previous != self.next {
+            unsafe {
+                gl::BindVertexArray(self.previous);
+            }
+        }
     }
 }
 
@@ -68,7 +87,7 @@ impl ArrayObject {
     pub fn new() -> Option<ArrayObject> {
         let mut opengl_id = 0;
         unsafe {
-            GenVertexArrays(1, &mut opengl_id);
+            gl::GenVertexArrays(1, &mut opengl_id);
         }
         match NonZeroU32::new(opengl_id as u32) {
             Some(opengl_id) => Some(ArrayObject { opengl_id }),
@@ -77,8 +96,8 @@ impl ArrayObject {
     }
 
     /// Сделать этот VAO текущим
-    pub fn bind(&self) {
-        unsafe { BindVertexArray(self.opengl_id.get()) }
+    pub fn bind(&self) -> CurrentArrayObjectGuard<'_> {
+        CurrentArrayObjectGuard::new(&self)
     }
 
     pub fn configure_layout<T: Pod>(
@@ -113,8 +132,8 @@ impl ArrayObject {
         // !! Вся работа с OpenGL - строго после проверок !!
 
         // Сделать буферы текущими
-        self.bind();
-        vbo.bind();
+        let _vao_binding = self.bind();
+        let _vbo_binding = vbo.bind();
 
         // Описать атрибуты для OpenGL
         for attribute in layout.get_attributes() {
@@ -132,7 +151,7 @@ impl ArrayObject {
             }
 
             unsafe {
-                EnableVertexAttribArray(attribute.get_location());
+                gl::EnableVertexAttribArray(attribute.get_location());
             }
         }
 
@@ -146,9 +165,9 @@ impl ArrayObject {
         let count = i32::try_from(count)
             .map_err(|_| simple_error!("Vertex count is too large for GLsizei"))?;
 
-        self.bind();
+        let _vao_binding = self.bind();
         unsafe {
-            DrawArrays(mode as u32, first, count);
+            gl::DrawArrays(mode as u32, first, count);
         }
 
         Ok(())
@@ -156,7 +175,7 @@ impl ArrayObject {
 
     fn vertex_attribute_integer_pointer(&self, stride: i32, attribute: &VertexAttribute) {
         unsafe {
-            VertexAttribIPointer(
+            gl::VertexAttribIPointer(
                 attribute.get_location(),
                 i32::from(attribute.get_components()),
                 attribute.get_value_type() as u32,
@@ -168,7 +187,7 @@ impl ArrayObject {
 
     fn vertex_attribute_long_pointer(&self, stride: i32, attribute: &VertexAttribute) {
         unsafe {
-            VertexAttribLPointer(
+            gl::VertexAttribLPointer(
                 attribute.get_location(),
                 i32::from(attribute.get_components()),
                 attribute.get_value_type() as u32,
@@ -180,7 +199,7 @@ impl ArrayObject {
 
     fn vertex_attribute_pointer(&self, stride: i32, attribute: &VertexAttribute) {
         unsafe {
-            VertexAttribPointer(
+            gl::VertexAttribPointer(
                 attribute.get_location(),
                 i32::from(attribute.get_components()),
                 attribute.get_value_type() as u32,
@@ -195,7 +214,7 @@ impl ArrayObject {
 impl Drop for ArrayObject {
     fn drop(&mut self) {
         unsafe {
-            DeleteVertexArrays(1, &self.opengl_id.get());
+            gl::DeleteVertexArrays(1, &self.opengl_id.get());
         }
     }
 }

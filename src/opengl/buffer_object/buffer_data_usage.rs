@@ -35,7 +35,6 @@ pub struct BufferDataUsage {
     // Назначение буфера данных
     pub usage_type: BufferDataUsageType,
 }
-
 impl BufferDataUsage {
     /// Создать новые правила использования буфера данных
     pub fn new(strategy: BufferDataUsageStrategy, usage_type: BufferDataUsageType) -> Self {
@@ -60,7 +59,6 @@ impl BufferDataUsage {
         }
     }
 }
-
 impl From<BufferDataUsage> for u32 {
     fn from(value: BufferDataUsage) -> Self {
         value.to_gl()

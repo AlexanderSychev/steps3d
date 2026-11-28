@@ -1,53 +1,24 @@
-use gl::{
-    ARRAY_BUFFER, ARRAY_BUFFER_BINDING, ATOMIC_COUNTER_BUFFER, ATOMIC_COUNTER_BUFFER_BINDING,
-    COPY_READ_BUFFER, COPY_READ_BUFFER_BINDING, COPY_WRITE_BUFFER, COPY_WRITE_BUFFER_BINDING,
-    DISPATCH_INDIRECT_BUFFER, DISPATCH_INDIRECT_BUFFER_BINDING, DRAW_INDIRECT_BUFFER,
-    DRAW_INDIRECT_BUFFER_BINDING, ELEMENT_ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER_BINDING,
-    PIXEL_PACK_BUFFER, PIXEL_PACK_BUFFER_BINDING, PIXEL_UNPACK_BUFFER, PIXEL_UNPACK_BUFFER_BINDING,
-    QUERY_BUFFER, QUERY_BUFFER_BINDING, SHADER_STORAGE_BUFFER, SHADER_STORAGE_BUFFER_BINDING,
-    TEXTURE_BUFFER, TEXTURE_BUFFER_BINDING, TRANSFORM_FEEDBACK_BUFFER,
-    TRANSFORM_FEEDBACK_BUFFER_BINDING, UNIFORM_BUFFER, UNIFORM_BUFFER_BINDING,
-};
-use simple_error::{SimpleError, SimpleResult, simple_error};
 use strum::FromRepr;
+use super::super::typings::impl_gl_enum_traits;
 
 /// Типы буферов
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum BufferObjectTarget {
-    ArrayBuffer = ARRAY_BUFFER,
-    AtomicCounterBuffer = ATOMIC_COUNTER_BUFFER,
-    CopyReadBuffer = COPY_READ_BUFFER,
-    CopyWriteBuffer = COPY_WRITE_BUFFER,
-    DispatchIndirectBuffer = DISPATCH_INDIRECT_BUFFER,
-    DrawIndirectBuffer = DRAW_INDIRECT_BUFFER,
-    ElementArrayBuffer = ELEMENT_ARRAY_BUFFER,
-    PixelPackBuffer = PIXEL_PACK_BUFFER,
-    PixelUnpackBuffer = PIXEL_UNPACK_BUFFER,
-    QueryBuffer = QUERY_BUFFER,
-    ShaderStorageBuffer = SHADER_STORAGE_BUFFER,
-    TextureBuffer = TEXTURE_BUFFER,
-    TransformFeedbackBuffer = TRANSFORM_FEEDBACK_BUFFER,
-    UniformBuffer = UNIFORM_BUFFER,
-}
-
-impl PartialEq<u32> for BufferObjectTarget {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-
-impl TryFrom<u32> for BufferObjectTarget {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"BufferObjectTarget\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
+    ArrayBuffer = gl::ARRAY_BUFFER,
+    AtomicCounterBuffer = gl::ATOMIC_COUNTER_BUFFER,
+    CopyReadBuffer = gl::COPY_READ_BUFFER,
+    CopyWriteBuffer = gl::COPY_WRITE_BUFFER,
+    DispatchIndirectBuffer = gl::DISPATCH_INDIRECT_BUFFER,
+    DrawIndirectBuffer = gl::DRAW_INDIRECT_BUFFER,
+    ElementArrayBuffer = gl::ELEMENT_ARRAY_BUFFER,
+    PixelPackBuffer = gl::PIXEL_PACK_BUFFER,
+    PixelUnpackBuffer = gl::PIXEL_UNPACK_BUFFER,
+    QueryBuffer = gl::QUERY_BUFFER,
+    ShaderStorageBuffer = gl::SHADER_STORAGE_BUFFER,
+    TextureBuffer = gl::TEXTURE_BUFFER,
+    TransformFeedbackBuffer = gl::TRANSFORM_FEEDBACK_BUFFER,
+    UniformBuffer = gl::UNIFORM_BUFFER,
 }
 
 /// Привязки буферов
@@ -56,40 +27,23 @@ impl TryFrom<u32> for BufferObjectTarget {
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, FromRepr)]
 #[repr(u32)]
 pub enum BufferObjectBinding {
-    ArrayBufferBinding = ARRAY_BUFFER_BINDING,
-    AtomicCounterBufferBinding = ATOMIC_COUNTER_BUFFER_BINDING,
-    CopyReadBufferBinding = COPY_READ_BUFFER_BINDING,
-    CopyWriteBufferBinding = COPY_WRITE_BUFFER_BINDING,
-    DispatchIndirectBufferBinding = DISPATCH_INDIRECT_BUFFER_BINDING,
-    DrawIndirectBufferBinding = DRAW_INDIRECT_BUFFER_BINDING,
-    ElementArrayBufferBinding = ELEMENT_ARRAY_BUFFER_BINDING,
-    PixelPackBufferBinding = PIXEL_PACK_BUFFER_BINDING,
-    PixelUnpackBufferBinding = PIXEL_UNPACK_BUFFER_BINDING,
-    QueryBufferBinding = QUERY_BUFFER_BINDING,
-    ShaderStorageBufferBinding = SHADER_STORAGE_BUFFER_BINDING,
-    TextureBufferBinding = TEXTURE_BUFFER_BINDING,
-    TransformFeedbackBufferBinding = TRANSFORM_FEEDBACK_BUFFER_BINDING,
-    UniformBufferBinding = UNIFORM_BUFFER_BINDING,
+    ArrayBufferBinding = gl::ARRAY_BUFFER_BINDING,
+    AtomicCounterBufferBinding = gl::ATOMIC_COUNTER_BUFFER_BINDING,
+    CopyReadBufferBinding = gl::COPY_READ_BUFFER_BINDING,
+    CopyWriteBufferBinding = gl::COPY_WRITE_BUFFER_BINDING,
+    DispatchIndirectBufferBinding = gl::DISPATCH_INDIRECT_BUFFER_BINDING,
+    DrawIndirectBufferBinding = gl::DRAW_INDIRECT_BUFFER_BINDING,
+    ElementArrayBufferBinding = gl::ELEMENT_ARRAY_BUFFER_BINDING,
+    PixelPackBufferBinding = gl::PIXEL_PACK_BUFFER_BINDING,
+    PixelUnpackBufferBinding = gl::PIXEL_UNPACK_BUFFER_BINDING,
+    QueryBufferBinding = gl::QUERY_BUFFER_BINDING,
+    ShaderStorageBufferBinding = gl::SHADER_STORAGE_BUFFER_BINDING,
+    TextureBufferBinding = gl::TEXTURE_BUFFER_BINDING,
+    TransformFeedbackBufferBinding = gl::TRANSFORM_FEEDBACK_BUFFER_BINDING,
+    UniformBufferBinding = gl::UNIFORM_BUFFER_BINDING,
 }
 
-impl PartialEq<u32> for BufferObjectBinding {
-    fn eq(&self, other: &u32) -> bool {
-        *self as u32 == *other
-    }
-}
-
-impl TryFrom<u32> for BufferObjectBinding {
-    type Error = SimpleError;
-
-    fn try_from(value: u32) -> SimpleResult<Self> {
-        Self::from_repr(value).ok_or_else(|| {
-            simple_error!(
-                "Cannot create \"BufferObjectBinding\" value from \"u32\" value: {}",
-                value
-            )
-        })
-    }
-}
+impl_gl_enum_traits!(BufferObjectTarget, BufferObjectBinding);
 
 // Конверсия между перечислениями
 
