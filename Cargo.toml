@@ -17,3 +17,4 @@ simplelog = "0.12.2"
 bytemuck = { version = "1.25.2", features = ["derive"] }
 strum = { version = "0.28.0", features = ["derive"] }
 image = "0.25.10"
+slotmap = "1.1.1"

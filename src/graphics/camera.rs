@@ -1,9 +1,7 @@
 //! Камера
 
-use super::scene::SceneEntity;
+use glam::Mat4;
 use glam::camera::lh::proj::opengl::perspective;
-use glam::camera::lh::view::look_to_mat4;
-use glam::{EulerRot, Mat4, Quat, Vec3};
 use simple_error::{SimpleResult, simple_error};
 use std::f32::consts::PI;
 use std::fmt::Debug;
@@ -346,51 +344,18 @@ impl Default for ClippingPlanes {
 /// Перспективная камера
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PerspectiveCamera {
-    /// Позиция камеры
-    position: Vec3,
-    /// Ориентация камеры в пространстве
-    orientation: Quat,
-    /// Плоскости отсечения
-    clipping: ClippingPlanes,
     /// Поле зрения
     field_of_view: FieldOfView,
+    /// Плоскости отсечения
+    clipping: ClippingPlanes,
 }
 impl PerspectiveCamera {
-    /// Попробовать создать камеру со стандартным базисом
-    pub fn try_new(
-        position: Vec3,
-        field_of_view: FieldOfView,
-        clipping: ClippingPlanes,
-    ) -> SimpleResult<Self> {
-        if !position.is_finite() {
-            return Err(simple_error!(
-                "Position point must contain only finite values"
-            ));
-        }
-
-        Ok(Self {
-            position,
-            orientation: Quat::IDENTITY,
-            clipping,
+    /// Создать камеру со стандартным базисом
+    pub fn new(field_of_view: FieldOfView, clipping: ClippingPlanes) -> Self {
+        Self {
             field_of_view,
-        })
-    }
-
-    // Получение векторов базиса
-
-    /// Получить направление вправо для базиса камеры
-    pub fn get_right(&self) -> Vec3 {
-        self.orientation * Vec3::X
-    }
-
-    /// Получить направление вверх для базиса камеры
-    pub fn get_up(&self) -> Vec3 {
-        self.orientation * Vec3::Y
-    }
-
-    /// Получить направление взгляда для базиса камеры
-    pub fn get_view(&self) -> Vec3 {
-        self.orientation * Vec3::Z
+            clipping,
+        }
     }
 
     /// Получить поле зрения камеры для чтения
@@ -423,17 +388,6 @@ impl PerspectiveCamera {
         self.clipping = clipping
     }
 
-    /// Получить позицию камеры
-    pub fn get_position(&self) -> Vec3 {
-        self.position
-    }
-
-    /// Возвращает матрицу вида (View Matrix) для левостороннего мира
-    pub fn get_view_matrix(&self) -> Mat4 {
-        // self.get_view() и self.get_up() уже нормализованы
-        look_to_mat4(self.position, self.get_view(), self.get_up())
-    }
-
     /// Возвращает матрицу проекции (Projection Matrix) для OpenGL
     pub fn get_projection_matrix(&self) -> Mat4 {
         perspective(
@@ -442,71 +396,5 @@ impl PerspectiveCamera {
             self.clipping.near,
             self.clipping.far,
         )
-    }
-}
-impl SceneEntity for PerspectiveCamera {
-    fn position_entity(&mut self, position: Vec3) -> SimpleResult<()> {
-        if !position.is_finite() {
-            return Err(simple_error!(
-                "Position point must contain only finite values"
-            ));
-        }
-        self.position = position;
-        Ok(())
-    }
-
-    fn move_entity(&mut self, deltas: Vec3) -> SimpleResult<()> {
-        if !deltas.is_finite() {
-            return Err(simple_error!(
-                "Position deltas must contain only finite values"
-            ));
-        }
-        self.position += self.orientation * deltas;
-        Ok(())
-    }
-
-    fn translate_entity(&mut self, deltas: Vec3) -> SimpleResult<()> {
-        if !deltas.is_finite() {
-            return Err(simple_error!(
-                "Position deltas must contain only finite values"
-            ));
-        }
-        self.position += deltas;
-        Ok(())
-    }
-
-    fn rotate_entity(&mut self, angles: Vec3) -> SimpleResult<()> {
-        if !angles.is_finite() {
-            return Err(simple_error!(
-                "Rotation angles must contain only finite values"
-            ));
-        }
-        self.orientation = Quat::from_euler(
-            EulerRot::YXZ,
-            -angles.y, // Yaw
-            -angles.x, // Pitch
-            -angles.z, // Roll
-        );
-        Ok(())
-    }
-
-    fn turn_entity(&mut self, angle_deltas: Vec3) -> SimpleResult<()> {
-        if !angle_deltas.is_finite() {
-            return Err(simple_error!(
-                "Rotation angles must contain only finite values"
-            ));
-        }
-        let delta_rot = Quat::from_euler(
-            EulerRot::YXZ,
-            -angle_deltas.y,
-            -angle_deltas.x,
-            -angle_deltas.z,
-        );
-        self.orientation = (self.orientation * delta_rot).normalize();
-        Ok(())
-    }
-
-    fn scale_entity(&mut self, _: Vec3) -> SimpleResult<()> {
-        Err(simple_error!("Camera is not scalable"))
     }
 }
