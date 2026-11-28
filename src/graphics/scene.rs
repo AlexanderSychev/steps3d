@@ -180,9 +180,21 @@ impl Scene {
         self.nodes.insert(SceneNode::default())
     }
 
+    // --- Геометрия ---
+
     /// Добавить геометрию в хранилище сцены (без создания узла)
     pub fn register_mesh(&mut self, mesh: Mesh) -> MeshId {
         self.meshes.insert(mesh)
+    }
+
+    /// Получить геометрию по дескриптору для чтения
+    pub fn get_mesh(&self, mesh_id: MeshId) -> Option<&Mesh> {
+        self.meshes.get(mesh_id)
+    }
+
+    /// Получить геометрию по дескриптору для записи
+    pub fn get_mesh_mut(&mut self, mesh_id: MeshId) -> Option<&mut Mesh> {
+        self.meshes.get_mut(mesh_id)
     }
 
     /// Создать узел сцены с указанным мешем
@@ -195,6 +207,8 @@ impl Scene {
             ..Default::default()
         }))
     }
+
+    // -- Камеры --
 
     /// Добавить камеру в сцену и вернуть ее ключ-дескриптор
     pub fn create_camera(
@@ -210,6 +224,18 @@ impl Scene {
             ..Default::default()
         })
     }
+
+    /// Получить камеру для чтения
+    pub fn get_camera(&self, camera_id: CameraId) -> Option<&PerspectiveCamera> {
+        self.cameras.get(camera_id)
+    }
+
+    /// Получить камеру для записи
+    pub fn get_camera_mut(&mut self, camera_id: CameraId) -> Option<&mut PerspectiveCamera> {
+        self.cameras.get_mut(camera_id)
+    }
+
+    // -- Источники освещения --
 
     /// Добавить точечный источник света в сцену и вернуть его ключ-дескриптор
     pub fn create_point_light(
@@ -260,6 +286,16 @@ impl Scene {
         Ok(node_id)
     }
 
+    /// Получить источник света для чтения
+    pub fn get_light(&self, light_id: LightId) -> Option<&LightSource> {
+        self.lights.get(light_id)
+    }
+
+    /// Получить источник света для записи
+    pub fn get_light_mut(&mut self, light_id: LightId) -> Option<&mut LightSource> {
+        self.lights.get_mut(light_id)
+    }
+
     // --- Доступ к узлам ---
 
     /// Получить узел сцены для чтения
@@ -270,6 +306,16 @@ impl Scene {
     /// Получить узел сцены для записи
     pub fn get_node_mut(&mut self, id: NodeId) -> Option<&mut SceneNode> {
         self.nodes.get_mut(id)
+    }
+
+    /// Перебрать узлы сцены вместе с их дескрипторами
+    pub fn iter(&self) -> impl Iterator<Item = (NodeId, &SceneNode)> {
+        self.nodes.iter()
+    }
+
+    /// Перебрать узлы сцены вместе с их дескрипторами для изменения
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (NodeId, &mut SceneNode)> {
+        self.nodes.iter_mut()
     }
 
     // --- Управление иерархией (аналог EntityParent) ---
@@ -363,5 +409,46 @@ impl Scene {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Scene;
+    use glam::Vec3;
+
+    #[test]
+    fn iteration_exposes_nodes_and_allows_mutation() {
+        let mut scene = Scene::default();
+        let first = scene.create_pivot();
+        let second = scene.create_pivot();
+
+        let node_ids: std::collections::BTreeSet<_> =
+            scene.iter().map(|(node_id, _)| node_id).collect();
+        assert_eq!(node_ids, [first, second].into_iter().collect());
+
+        for (node_id, node) in scene.iter_mut() {
+            let x = if node_id == first { 1.0 } else { 2.0 };
+            node.local_transform
+                .set_position(Vec3::new(x, 0.0, 0.0))
+                .unwrap();
+        }
+
+        assert_eq!(
+            scene
+                .get_node(first)
+                .unwrap()
+                .local_transform
+                .get_position(),
+            Vec3::X
+        );
+        assert_eq!(
+            scene
+                .get_node(second)
+                .unwrap()
+                .local_transform
+                .get_position(),
+            Vec3::X * 2.0
+        );
     }
 }

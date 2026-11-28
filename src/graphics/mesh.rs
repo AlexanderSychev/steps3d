@@ -28,7 +28,123 @@ pub struct Mesh {
     /// Индексы вершин
     pub indices: Vec<u32>,
 }
+
+fn checked_mesh_capacities(
+    name: &'static str,
+    vertex_count: u64,
+    index_count: u64,
+) -> SimpleResult<(usize, usize)> {
+    if vertex_count > u64::from(u32::MAX) + 1 {
+        return Err(simple_error!(
+            "{} has more vertices than u32 indices can address",
+            name
+        ));
+    }
+
+    let vertex_count = usize::try_from(vertex_count)
+        .map_err(|_| simple_error!("{} vertex count exceeds platform capacity", name))?;
+    let index_count = usize::try_from(index_count)
+        .map_err(|_| simple_error!("{} index count exceeds platform capacity", name))?;
+    Ok((vertex_count, index_count))
+}
+
+fn reserve_mesh_buffers(
+    name: &'static str,
+    vertices: &mut Vec<Vertex>,
+    indices: &mut Vec<u32>,
+    vertex_count: usize,
+    index_count: usize,
+) -> SimpleResult<()> {
+    vertices.try_reserve_exact(vertex_count).map_err(|error| {
+        simple_error!(
+            "Cannot reserve {} vertices for {}: {}",
+            vertex_count,
+            name,
+            error
+        )
+    })?;
+    indices.try_reserve_exact(index_count).map_err(|error| {
+        simple_error!(
+            "Cannot reserve {} indices for {}: {}",
+            index_count,
+            name,
+            error
+        )
+    })?;
+    Ok(())
+}
+
 impl Mesh {
+    /// Создать прямоугольник из двух треугольников
+    pub fn try_new_quad(maybe_size: Option<Vec2>) -> SimpleResult<Self> {
+        let size = maybe_size.unwrap_or(Vec2::ONE);
+        if !size.is_finite() || size.x <= 0.0 || size.y <= 0.0 {
+            return Err(simple_error!("Quad size must be finite and positive"));
+        }
+
+        // Вычисляем и валидируем полуразмеры прямоугольника
+        let hx = size.x * 0.5;
+        if !hx.is_finite() {
+            return Err(simple_error!("Quad width must be finite"));
+        }
+        let hy = size.y * 0.5;
+        if !hy.is_finite() || hy == 0.0 {
+            return Err(simple_error!(
+                "Quad half-height must be finite and positive"
+            ));
+        }
+        if hx == 0.0 {
+            return Err(simple_error!("Quad half-width must be positive"));
+        }
+
+        // Общие нормаль, касательный вектор и бинормаль
+        let normal = Vec3::Z;
+        let tangent = Vec3::X;
+        let binormal = normal.cross(tangent);
+
+        // Точки прямоугольника
+        let p0 = Vec3::new(-hx, -hy, 0.0);
+        let p1 = Vec3::new(-hx, hy, 0.0);
+        let p2 = Vec3::new(hx, hy, 0.0);
+        let p3 = Vec3::new(hx, -hy, 0.0);
+
+        let vertices = vec![
+            Vertex {
+                position: p0,
+                texture_coords: Vec2::new(0.0, 0.0),
+                normal,
+                tangent,
+                binormal,
+            },
+            Vertex {
+                position: p1,
+                texture_coords: Vec2::new(0.0, 1.0),
+                normal,
+                tangent,
+                binormal,
+            },
+            Vertex {
+                position: p2,
+                texture_coords: Vec2::new(1.0, 1.0),
+                normal,
+                tangent,
+                binormal,
+            },
+            Vertex {
+                position: p3,
+                texture_coords: Vec2::new(1.0, 0.0),
+                normal,
+                tangent,
+                binormal,
+            },
+        ];
+
+        // Оба треугольника обходятся против часовой стрелки со стороны +Z
+        let indices = vec![0, 3, 2, 2, 1, 0];
+
+        Ok(Self { vertices, indices })
+    }
+
     /// Создать куб заданного размера
     pub fn try_new_cube(maybe_size: Option<Vec3>) -> SimpleResult<Self> {
         let size = maybe_size.unwrap_or(Vec3::ONE);
@@ -39,6 +155,15 @@ impl Mesh {
         let hx = size.x * 0.5;
         let hy = size.y * 0.5;
         let hz = size.z * 0.5;
+        if !hx.is_finite()
+            || !hy.is_finite()
+            || !hz.is_finite()
+            || hx == 0.0
+            || hy == 0.0
+            || hz == 0.0
+        {
+            return Err(simple_error!("Cube half-sizes must be finite and positive"));
+        }
 
         // Вспомогательная функция для сборки одной грани из 4 углов (по часовой стрелке снаружи)
         let make_face =
@@ -165,10 +290,24 @@ impl Mesh {
             return Err(simple_error!("Sphere rings and sectors must be at least 3"));
         }
 
-        let num_vertices = ((rings + 1) * (sectors + 1)) as usize;
-        let num_indices = (rings * sectors * 6) as usize;
-        let mut vertices = Vec::with_capacity(num_vertices);
-        let mut indices = Vec::with_capacity(num_indices);
+        let vertex_count = (u64::from(rings) + 1)
+            .checked_mul(u64::from(sectors) + 1)
+            .ok_or_else(|| simple_error!("Sphere vertex count overflow"))?;
+        let index_count = u64::from(rings)
+            .checked_mul(u64::from(sectors))
+            .and_then(|count| count.checked_mul(6))
+            .ok_or_else(|| simple_error!("Sphere index count overflow"))?;
+        let (num_vertices, num_indices) =
+            checked_mesh_capacities("Sphere", vertex_count, index_count)?;
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        reserve_mesh_buffers(
+            "Sphere",
+            &mut vertices,
+            &mut indices,
+            num_vertices,
+            num_indices,
+        )?;
 
         let inv_rings = 1.0 / rings as f32;
         let inv_sectors = 1.0 / sectors as f32;
@@ -243,11 +382,28 @@ impl Mesh {
         if rings < 3 || sides < 3 {
             return Err(simple_error!("Torus rings and sides must be at least 3"));
         }
+        if !(major_radius + minor_radius).is_finite() {
+            return Err(simple_error!("Torus outer radius must be finite"));
+        }
 
-        let num_vertices = ((rings + 1) * (sides + 1)) as usize;
-        let num_indices = (rings * sides * 6) as usize;
-        let mut vertices = Vec::with_capacity(num_vertices);
-        let mut indices = Vec::with_capacity(num_indices);
+        let vertex_count = (u64::from(rings) + 1)
+            .checked_mul(u64::from(sides) + 1)
+            .ok_or_else(|| simple_error!("Torus vertex count overflow"))?;
+        let index_count = u64::from(rings)
+            .checked_mul(u64::from(sides))
+            .and_then(|count| count.checked_mul(6))
+            .ok_or_else(|| simple_error!("Torus index count overflow"))?;
+        let (num_vertices, num_indices) =
+            checked_mesh_capacities("Torus", vertex_count, index_count)?;
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        reserve_mesh_buffers(
+            "Torus",
+            &mut vertices,
+            &mut indices,
+            num_vertices,
+            num_indices,
+        )?;
 
         let inv_rings = 1.0 / rings as f32;
         let inv_sides = 1.0 / sides as f32;
@@ -290,8 +446,8 @@ impl Mesh {
                 let c = (i + 1) * stride + (j + 1);
                 let d = i * stride + (j + 1);
 
-                // Обход по часовой стрелке снаружи
-                indices.extend_from_slice(&[a, b, c, c, d, a]);
+                // Обход по часовой стрелке снаружи; нормали треугольников направлены наружу
+                indices.extend_from_slice(&[a, c, b, c, a, d]);
             }
         }
 
@@ -314,15 +470,33 @@ impl Mesh {
         }
 
         let half_h = height * 0.5;
+        if half_h == 0.0 {
+            return Err(simple_error!("Cone half-height must be positive"));
+        }
         let inv_sectors = 1.0 / sectors as f32;
 
-        // Наклон образующей конуса для расчета боковых нормалей
-        let slope_len = (radius * radius + height * height).sqrt();
-        let ny = radius / slope_len;
-        let nr = height / slope_len;
+        // Масштабирование перед длиной гипотенузы не даёт переполниться квадратам радиуса и высоты.
+        let slope_scale = radius.max(height);
+        let scaled_radius = radius / slope_scale;
+        let scaled_height = height / slope_scale;
+        let slope_len = scaled_radius.hypot(scaled_height);
+        let ny = scaled_radius / slope_len;
+        let nr = scaled_height / slope_len;
 
-        let mut vertices = Vec::with_capacity((sectors as usize + 1) * 3 + 1);
-        let mut indices = Vec::with_capacity(sectors as usize * 6);
+        let sector_count = u64::from(sectors);
+        let vertex_count = sector_count * 3 + 4;
+        let index_count = sector_count * 6;
+        let (num_vertices, num_indices) =
+            checked_mesh_capacities("Cone", vertex_count, index_count)?;
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        reserve_mesh_buffers(
+            "Cone",
+            &mut vertices,
+            &mut indices,
+            num_vertices,
+            num_indices,
+        )?;
 
         // 1. Боковая поверхность: пары вершин (основание -> вершина) для каждого сектора
         for j in 0..=sectors {
@@ -358,8 +532,8 @@ impl Mesh {
             let t0 = j * 2 + 1;
             let b1 = (j + 1) * 2;
 
-            // Обход по часовой стрелке снаружи
-            indices.extend_from_slice(&[b0, b1, t0]);
+            // Обход по часовой стрелке снаружи; нормаль треугольника направлена наружу
+            indices.extend_from_slice(&[b0, t0, b1]);
         }
 
         // 2. Нижняя крышка (основание на y = -half_h)
@@ -413,15 +587,28 @@ impl Mesh {
         }
 
         let half_h = height * 0.5;
+        if half_h == 0.0 {
+            return Err(simple_error!("Cylinder half-height must be positive"));
+        }
         let inv_sectors = 1.0 / sectors as f32;
 
         // Боковая стенка: 2 * (sectors + 1), две крышки: 2 * (1 + sectors + 1)
-        let num_vertices = (sectors as usize + 1) * 4 + 2;
+        let sector_count = u64::from(sectors);
+        let vertex_count = (sector_count + 1) * 4 + 2;
         // Боковая стенка: sectors * 6, две крышки: 2 * sectors * 3
-        let num_indices = sectors as usize * 12;
+        let index_count = sector_count * 12;
+        let (num_vertices, num_indices) =
+            checked_mesh_capacities("Cylinder", vertex_count, index_count)?;
 
-        let mut vertices = Vec::with_capacity(num_vertices);
-        let mut indices = Vec::with_capacity(num_indices);
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        reserve_mesh_buffers(
+            "Cylinder",
+            &mut vertices,
+            &mut indices,
+            num_vertices,
+            num_indices,
+        )?;
 
         // 1. Боковая поверхность
         for j in 0..=sectors {
@@ -461,8 +648,8 @@ impl Mesh {
             let b1 = (j + 1) * 2;
             let t1 = (j + 1) * 2 + 1;
 
-            // Обход по часовой стрелке снаружи
-            indices.extend_from_slice(&[b0, b1, t1, t1, t0, b0]);
+            // Обход по часовой стрелке снаружи; нормали треугольников направлены наружу
+            indices.extend_from_slice(&[b0, t1, b1, t1, b0, t0]);
         }
 
         // 2. Верхняя крышка (y = +half_h)
@@ -530,5 +717,83 @@ impl Mesh {
         }
 
         Ok(Self { vertices, indices })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Mesh;
+
+    fn assert_triangle_winding_matches_normals(mesh: &Mesh) {
+        for triangle in mesh.indices.chunks_exact(3) {
+            let v0 = mesh.vertices[triangle[0] as usize];
+            let v1 = mesh.vertices[triangle[1] as usize];
+            let v2 = mesh.vertices[triangle[2] as usize];
+            let face_normal = (v1.position - v0.position).cross(v2.position - v0.position);
+            let vertex_normal = v0.normal + v1.normal + v2.normal;
+
+            assert!(
+                face_normal.dot(vertex_normal) > 0.0,
+                "triangle indices {triangle:?} disagree with vertex normals"
+            );
+        }
+    }
+
+    #[test]
+    fn quad_has_correct_geometry_winding_and_tangent_frame() {
+        let mesh = Mesh::try_new_quad(None).unwrap();
+        assert_eq!(mesh.vertices.len(), 4);
+        assert_eq!(mesh.indices, [0, 3, 2, 2, 1, 0]);
+        assert_triangle_winding_matches_normals(&mesh);
+        for vertex in mesh.vertices {
+            assert_eq!(vertex.tangent.cross(vertex.binormal), vertex.normal);
+        }
+    }
+
+    #[test]
+    fn quad_rejects_degenerate_sizes() {
+        assert!(Mesh::try_new_quad(Some(glam::Vec2::new(0.0, 1.0))).is_err());
+        assert!(Mesh::try_new_quad(Some(glam::Vec2::splat(f32::from_bits(1)))).is_err());
+    }
+
+    #[test]
+    fn grid_meshes_reject_counts_that_cannot_be_indexed() {
+        assert!(Mesh::try_new_sphere(1.0, u32::MAX, 3).is_err());
+        assert!(Mesh::try_new_torus(1.0, 0.5, u32::MAX, 3).is_err());
+        assert!(Mesh::try_new_cone(1.0, 1.0, u32::MAX).is_err());
+        assert!(Mesh::try_new_cylinder(1.0, 1.0, u32::MAX).is_err());
+    }
+
+    #[test]
+    fn cone_normals_remain_finite_for_large_dimensions() {
+        let mesh = Mesh::try_new_cone(f32::MAX, f32::MAX, 3).unwrap();
+        assert!(
+            mesh.vertices
+                .iter()
+                .all(|vertex| { vertex.position.is_finite() && vertex.normal.is_finite() })
+        );
+    }
+
+    #[test]
+    fn torus_rejects_overflowing_outer_radius() {
+        assert!(Mesh::try_new_torus(f32::MAX, f32::MAX, 3, 3).is_err());
+    }
+
+    #[test]
+    fn torus_winding_matches_normals() {
+        let mesh = Mesh::try_new_torus(2.0, 0.5, 8, 6).unwrap();
+        assert_triangle_winding_matches_normals(&mesh);
+    }
+
+    #[test]
+    fn cone_winding_matches_normals() {
+        let mesh = Mesh::try_new_cone(1.0, 2.0, 8).unwrap();
+        assert_triangle_winding_matches_normals(&mesh);
+    }
+
+    #[test]
+    fn cylinder_winding_matches_normals() {
+        let mesh = Mesh::try_new_cylinder(1.0, 2.0, 8).unwrap();
+        assert_triangle_winding_matches_normals(&mesh);
     }
 }
